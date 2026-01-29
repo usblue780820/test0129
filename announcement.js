@@ -1,6 +1,6 @@
 /**
- * 公休公告生成器 (月曆版 - 修正欄位對應 + 全版背景圖 + 清除背景 + 空白區備註 + 圖片縮放模式 + 圖片置頂 + 新年預設背景)
- * 負責將公休日資料繪製成圖片
+ * 公休公告生成器 (最終整合版)
+ * 功能：修正欄位讀取 + 全版背景圖 + 清除背景 + 空白區備註 + 圖片縮放模式 + 圖片置頂 + 新年預設背景
  */
 
 const ANNOUNCE_CONFIG = {
@@ -63,6 +63,7 @@ function initAnnouncementGenerator() {
             }
         });
 
+        // 確保按鈕插入的位置存在
         const container = fileInput.closest('div').parentElement;
 
         // 2. 自動插入清除背景按鈕
@@ -74,7 +75,7 @@ function initAnnouncementGenerator() {
             clearBtn.onclick = function() {
                 customBgImage = null; 
                 fileInput.value = ''; 
-                // 切換回預設模板時，如果是新年版要重新載入預設圖，如果是常規版就清空
+                // 若在新年版按下清除，重新載入預設圖；常規版則清空
                 if (currentTemplateType === 'newyear') {
                     setAnnouncementTemplate('newyear');
                 } else {
@@ -92,7 +93,6 @@ function initAnnouncementGenerator() {
                 <input type="checkbox" id="bg-fit-checkbox" class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer">
                 <label for="bg-fit-checkbox" class="ml-2 text-sm font-bold text-gray-700 cursor-pointer">完整顯示原圖 (不裁切)</label>
             `;
-            // 插入在清除按鈕下方
             container.appendChild(fitWrapper);
             
             // 綁定事件：勾選狀態改變時重繪
@@ -127,11 +127,13 @@ function openAnnouncementModal() {
             if (store) {
                 console.log("公告生成器 - 讀取分店資料:", store); 
 
-                // 建立正規化對照表
+                // 建立正規化對照表 (容錯處理)
                 const normalizedStore = {};
                 Object.keys(store).forEach(k => {
-                    const cleanKey = k.toString().replace(/\s+/g, '').toLowerCase();
-                    normalizedStore[cleanKey] = store[k];
+                    if (k && typeof k === 'string') {
+                        const cleanKey = k.replace(/\s+/g, '').toLowerCase();
+                        normalizedStore[cleanKey] = store[k];
+                    }
                 });
 
                 const getValue = (targetKey) => {
@@ -141,6 +143,7 @@ function openAnnouncementModal() {
                     return '';
                 };
 
+                // 使用中文 Key 抓取資料
                 const phone = getValue('預約專線');
                 const line = getValue('LINE官方帳號');
                 const fb = getValue('FACEBOOK官方專頁');
@@ -177,25 +180,24 @@ function setAnnouncementTemplate(type) {
     const fileInput = document.getElementById('announce-bg-upload');
     const fitCheckbox = document.getElementById('bg-fit-checkbox');
 
-    // 清空手動上傳的圖片 Input (但不一定清空 customBgImage，看情況)
+    // 清空手動上傳的 Input 顯示
     if(fileInput) fileInput.value = '';
 
     if (type === 'newyear') {
-        // 新年版：如果沒有手動上傳的圖片 (或是被清除)，就載入預設圖
-        // 為了確保切換時能生效，這裡我們重新建立一個 Image 物件
+        // 新年版：如果沒有手動上傳的圖片，載入預設背景
         const img = new Image();
         img.onload = function() { 
             customBgImage = img; 
-            // 強制勾選「完整顯示」
+            // 強制勾選「完整顯示」以防裁切
             if(fitCheckbox) fitCheckbox.checked = true;
             drawAnnouncement(); 
         };
-        // 設定圖片路徑，確保 background02.jpg 和 index.html 在同一目錄下
+        // 確保 background02.jpg 在同目錄下
         img.src = 'background02.jpg'; 
     } else {
-        // 常規版：清除背景圖
+        // 常規版：清除背景圖，恢復漸層
         customBgImage = null; 
-        if(fitCheckbox) fitCheckbox.checked = false; // 取消勾選
+        if(fitCheckbox) fitCheckbox.checked = false; 
         updateRenderOptions();
     }
 }
@@ -213,14 +215,14 @@ function drawAnnouncement() {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
 
-    // 1. 繪製背景
+    // 1. 繪製背景 (先畫漸層底色)
     const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
     grad.addColorStop(0, style.bgGradient[0]);
     grad.addColorStop(1, style.bgGradient[1]);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 如果有自訂圖片 (或預設圖片)，再疊上去
+    // 如果有自訂圖片 (或新年預設圖)，再疊上去
     if (customBgImage) {
         const isContain = document.getElementById('bg-fit-checkbox') && document.getElementById('bg-fit-checkbox').checked;
         if (isContain) {
@@ -409,8 +411,7 @@ function drawCoverImage(ctx, img, w, h) {
     } else {
         // 圖片比較高：寬度填滿，垂直改為置頂 (原為置中)
         drawW = w; drawH = w / prop; startX = 0; 
-        // startY = (h - drawH) / 2; // 置中代碼 (已註解)
-        startY = 0; // 強制置頂
+        startY = 0; // 強制置頂，不垂直置中
     }
     ctx.drawImage(img, startX, startY, drawW, drawH);
 }
@@ -421,8 +422,7 @@ function drawContainImage(ctx, img, w, h) {
     const drawW = img.width * scale;
     const drawH = img.height * scale;
     const startX = (w - drawW) / 2;
-    // const startY = (h - drawH) / 2; // 置中代碼 (已註解)
-    const startY = 0; // 強制置頂
+    const startY = 0; // 強制置頂，下方留白
     ctx.drawImage(img, startX, startY, drawW, drawH);
 }
 
