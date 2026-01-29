@@ -487,8 +487,8 @@
                         </div>
                     </div>
 
-                    <!-- 下載按鈕 (手機版時，為了方便按到，設定區也有一個) -->
-                    <div class="pt-4 border-t border-gray-200 md:hidden">
+                    <!-- 下載按鈕 (統一放在左側設定區底部) -->
+                    <div class="pt-4 border-t border-gray-200">
                         <button onclick="downloadAnnouncement()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-lg flex items-center justify-center gap-2">
                             <i class="fa-solid fa-download"></i> 下載圖片
                         </button>
@@ -497,17 +497,11 @@
             </div>
 
             <!-- 右側預覽區 (電腦版右側，手機版下方) -->
-            <div class="w-full md:w-2/3 bg-gray-200 flex flex-col items-center justify-center p-4 md:p-8 overflow-y-auto flex-1">
-                <div class="shadow-2xl mb-4 md:mb-0 max-w-full">
+            <!-- 修正：移除 justify-center 並使用 my-auto，避免圖片過高時上方被裁切 -->
+            <div class="w-full md:w-2/3 bg-gray-200 flex flex-col items-center p-4 md:p-8 overflow-y-auto flex-1">
+                <div class="shadow-2xl mb-4 md:mb-0 max-w-full my-auto">
                     <!-- Canvas 加入 max-w-full 確保手機不破版 -->
                     <canvas id="announce-canvas" class="max-w-full h-auto rounded-lg block mx-auto"></canvas>
-                </div>
-                
-                <!-- 電腦版下載按鈕 (手機版隱藏) -->
-                <div class="mt-4 hidden md:block">
-                     <button onclick="downloadAnnouncement()" class="bg-blue-600 text-white py-2 px-6 rounded-lg font-bold hover:bg-blue-700 transition shadow-lg flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-download"></i> 下載圖片
-                    </button>
                 </div>
             </div>
         </div>
