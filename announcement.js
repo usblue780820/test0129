@@ -1,5 +1,5 @@
 /**
- * 公休公告生成器 (月曆版 - 修正欄位對應 + 全版背景圖 + 清除背景 + 空白區備註)
+ * 公休公告生成器 (月曆版 - 修正欄位對應 + 全版背景圖 + 清除背景 + 空白區備註 + 圖片縮放模式 + 圖片置頂)
  * 負責將公休日資料繪製成圖片
  */
 
@@ -17,7 +17,7 @@ const ANNOUNCE_CONFIG = {
             gridBorder: '#cbd5e1', 
             dayNumber: '#334155', 
             offText: '#ef4444', 
-            extraNoteColor: '#ef4444', // [新增] 備註文字顏色 (預設紅，顯眼)
+            extraNoteColor: '#ef4444', // 備註文字顏色
             footerBg: '#1e3a8a', 
             footerText: '#ffffff', 
             font: 'Noto Sans TC, sans-serif'
@@ -30,7 +30,7 @@ const ANNOUNCE_CONFIG = {
             gridBorder: '#fda4af', 
             dayNumber: '#881337', 
             offText: '#b91c1c', 
-            extraNoteColor: '#b91c1c', // [新增] 備註文字顏色
+            extraNoteColor: '#b91c1c', // 備註文字顏色
             footerBg: '#991b1b', 
             footerText: '#fef3c7', 
             font: 'Noto Sans TC, sans-serif'
@@ -43,7 +43,7 @@ let customBgImage = null;
 let renderOptions = {
     textColorMode: 'dark',
     line1: '', line2: '', line3: '', line4: '',
-    extraNote: '' // [新增] 額外備註文字
+    extraNote: '' 
 };
 
 function initAnnouncementGenerator() {
@@ -63,8 +63,9 @@ function initAnnouncementGenerator() {
             }
         });
 
-        // 2. 自動插入清除背景按鈕
         const container = fileInput.closest('div').parentElement;
+
+        // 2. 自動插入清除背景按鈕
         if (container && !document.getElementById('btn-clear-bg')) {
             const clearBtn = document.createElement('button');
             clearBtn.id = 'btn-clear-bg';
@@ -78,11 +79,25 @@ function initAnnouncementGenerator() {
             container.appendChild(clearBtn);
         }
 
-        // 3. [新增] 自動插入「額外備註」輸入框
-        // 找到底部資訊的容器 (line4 的父元素)
+        // 3. 自動插入「完整顯示」勾選框 (控制圖片縮放)
+        if (container && !document.getElementById('bg-fit-checkbox')) {
+            const fitWrapper = document.createElement('div');
+            fitWrapper.className = 'mt-2 flex items-center px-1';
+            fitWrapper.innerHTML = `
+                <input type="checkbox" id="bg-fit-checkbox" class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer">
+                <label for="bg-fit-checkbox" class="ml-2 text-sm font-bold text-gray-700 cursor-pointer">完整顯示原圖 (不裁切)</label>
+            `;
+            // 插入在清除按鈕下方
+            container.appendChild(fitWrapper);
+            
+            // 綁定事件：勾選狀態改變時重繪
+            document.getElementById('bg-fit-checkbox').addEventListener('change', drawAnnouncement);
+        }
+
+        // 4. 自動插入「額外備註」輸入框
         const line4Input = document.getElementById('announce-line4');
         if (line4Input && !document.getElementById('announce-extra')) {
-            const infoContainer = line4Input.parentElement; // 取得 .space-y-3 容器
+            const infoContainer = line4Input.parentElement;
             
             const noteWrapper = document.createElement('div');
             noteWrapper.innerHTML = `
@@ -91,7 +106,6 @@ function initAnnouncementGenerator() {
             `;
             infoContainer.appendChild(noteWrapper);
 
-            // 綁定輸入事件
             document.getElementById('announce-extra').addEventListener('input', updateRenderOptions);
         }
     }
@@ -108,10 +122,24 @@ function openAnnouncementModal() {
             if (store) {
                 console.log("公告生成器 - 讀取分店資料:", store); 
 
-                const phone = store.phone || '';
-                const line = store.lineId || '';
-                const fb = store.fbPage || '';
-                const hours = store.displayHours || '';
+                // 建立正規化對照表
+                const normalizedStore = {};
+                Object.keys(store).forEach(k => {
+                    const cleanKey = k.toString().replace(/\s+/g, '').toLowerCase();
+                    normalizedStore[cleanKey] = store[k];
+                });
+
+                const getValue = (targetKey) => {
+                    if (store[targetKey] !== undefined) return store[targetKey];
+                    const cleanTarget = targetKey.replace(/\s+/g, '').toLowerCase();
+                    if (normalizedStore[cleanTarget] !== undefined) return normalizedStore[cleanTarget];
+                    return '';
+                };
+
+                const phone = getValue('預約專線');
+                const line = getValue('LINE官方帳號');
+                const fb = getValue('FACEBOOK官方專頁');
+                const hours = getValue('營業時間');
 
                 const elLine1 = document.getElementById('announce-line1');
                 const elLine2 = document.getElementById('announce-line2');
@@ -121,7 +149,7 @@ function openAnnouncementModal() {
                 if(elLine1) elLine1.value = phone ? `📞 預約專線：${phone}` : (elLine1.value || '📞 預約專線：');
                 if(elLine2) elLine2.value = line ? `💬 LINE官方帳號：${line}` : (elLine2.value || '💬 LINE官方帳號：');
                 if(elLine3) elLine3.value = fb ? `👍 FACEBOOK官方專頁：${fb}` : (elLine3.value || '👍 FACEBOOK官方專頁：');
-                if(elLine4) elLine4.value = hours ? `🕒 營業時間：${hours}` : '🕒 營業時間：10:00 - 21:00';
+                if(elLine4) elLine4.value = hours ? `🕒 營業時間：${hours}` : (elLine4.value || '🕒 營業時間：10:00 - 21:00');
             }
         }
         updateRenderOptions();
@@ -133,7 +161,6 @@ function updateRenderOptions() {
     renderOptions.line2 = document.getElementById('announce-line2').value;
     renderOptions.line3 = document.getElementById('announce-line3').value;
     renderOptions.line4 = document.getElementById('announce-line4').value;
-    // [新增] 讀取備註文字
     const extraInput = document.getElementById('announce-extra');
     renderOptions.extraNote = extraInput ? extraInput.value : '';
     
@@ -161,15 +188,21 @@ function drawAnnouncement() {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
 
-    // 1. 背景
+    // 1. 繪製背景
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0, style.bgGradient[0]);
+    grad.addColorStop(1, style.bgGradient[1]);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 如果有自訂圖片，再疊上去
     if (customBgImage) {
-        drawCoverImage(ctx, customBgImage, canvas.width, canvas.height);
-    } else {
-        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        grad.addColorStop(0, style.bgGradient[0]);
-        grad.addColorStop(1, style.bgGradient[1]);
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const isContain = document.getElementById('bg-fit-checkbox') && document.getElementById('bg-fit-checkbox').checked;
+        if (isContain) {
+            drawContainImage(ctx, customBgImage, canvas.width, canvas.height);
+        } else {
+            drawCoverImage(ctx, customBgImage, canvas.width, canvas.height);
+        }
     }
 
     // 2. 標題與副標題
@@ -281,25 +314,19 @@ function drawAnnouncement() {
         currentY += cellHeight;
     }
 
-    // 4. [新增] 繪製空白區備註 (在 Grid 結束後，Footer 開始前)
+    // 4. 空白區備註
     const footerStartY = canvas.height - 240; 
-    
     if (renderOptions.extraNote) {
-        // currentY 現在的位置就是最後一行 Grid 下方的 Y 座標
-        // 計算空白區的中心點
         const gapCenterY = currentY + (footerStartY - currentY) / 2;
         
-        ctx.font = `bold 42px ${style.font}`; // 備註字體較大
-        ctx.fillStyle = style.extraNoteColor; // 使用顯眼的顏色
+        ctx.font = `bold 42px ${style.font}`; 
+        ctx.fillStyle = style.extraNoteColor; 
         ctx.textAlign = 'center';
         
-        // 處理換行
         const lines = renderOptions.extraNote.split('\n');
         const lineHeight = 60;
         const totalTextHeight = lines.length * lineHeight;
-        
-        // 將文字區塊垂直置中於空白處
-        let textY = gapCenterY - (totalTextHeight / 2) + (lineHeight / 3); // 微調垂直位置
+        let textY = gapCenterY - (totalTextHeight / 2) + (lineHeight / 3);
 
         lines.forEach(line => {
             ctx.fillText(line, centerX, textY);
@@ -346,15 +373,31 @@ function roundRect(ctx, x, y, width, height, radius, topOnly = false, fill = fal
     ctx.closePath();
 }
 
+// 模式1: 填滿 (Cover) - 修改：圖片一律置頂 (startY = 0)
 function drawCoverImage(ctx, img, w, h) {
     const prop = img.width / img.height;
     const ctxProp = w / h;
     let drawW, drawH, startX, startY;
     if (prop > ctxProp) {
+        // 圖片比較寬：高度填滿，水平置中，垂直本來就是滿的所以置頂
         drawH = h; drawW = h * prop; startX = (w - drawW) / 2; startY = 0;
     } else {
-        drawW = w; drawH = w / prop; startX = 0; startY = (h - drawH) / 2;
+        // 圖片比較高：寬度填滿，垂直改為置頂 (原為置中)
+        drawW = w; drawH = w / prop; startX = 0; 
+        // startY = (h - drawH) / 2; // 置中代碼 (已註解)
+        startY = 0; // 強制置頂
     }
+    ctx.drawImage(img, startX, startY, drawW, drawH);
+}
+
+// 模式2: 完整顯示 (Contain) - 修改：圖片一律置頂
+function drawContainImage(ctx, img, w, h) {
+    const scale = Math.min(w / img.width, h / img.height);
+    const drawW = img.width * scale;
+    const drawH = img.height * scale;
+    const startX = (w - drawW) / 2;
+    // const startY = (h - drawH) / 2; // 置中代碼 (已註解)
+    const startY = 0; // 強制置頂
     ctx.drawImage(img, startX, startY, drawW, drawH);
 }
 
