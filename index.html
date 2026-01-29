@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>美容預約系統 (日程表版)</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Font Awesome 圖示 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 載入 flatpickr (日期選擇器) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/zh-tw.js"></script>
+    <!-- SweetAlert2 (更漂亮的提示框) -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 表格樣式優化 */
+        .schedule-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .schedule-table th {
+            background-color: #f9fafb;
+            color: #374151;
+            font-weight: 600;
+            padding: 12px;
+            text-align: left;
+            border-bottom: 2px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .schedule-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f3f4f6;
+            vertical-align: middle;
+            height: 60px; /* 固定最小高度，方便點擊 */
+        }
+        .schedule-table tr:hover td {
+            background-color: #f8fafc;
+        }
+        /* 時間欄位 */
+        .time-cell {
+            width: 100px;
+            font-weight: bold;
+            color: #4b5563;
+            background-color: #f9fafb;
+            border-right: 1px solid #e5e7eb;
+            text-align: center;
+        }
+        /* 內容欄位 - 可點擊區域 */
+        .content-cell {
+            cursor: pointer;
+            position: relative;
+            transition: background-color 0.2s;
+        }
+        .content-cell:hover {
+            background-color: #eff6ff; /* 淺藍色 hover */
+        }
+        
+        /* [新增] 該時段不接客的儲存格樣式 */
+        .content-cell-blocked {
+            background-color: #e5e7eb !important; /* 深灰色 */
+            cursor: not-allowed; /* 禁止符號 */
+            opacity: 0.8;
+        }
+        
+        /* 預約群組樣式 */
+        .appt-group {
+            border-left: 4px solid #cbd5e1;
+            padding-left: 8px;
+            margin-bottom: 12px;
+        }
+        .appt-group:last-child {
+            margin-bottom: 0;
+        }
+
+        /* 預約卡片 */
+        .appt-chip {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 6px 10px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            margin-right: 0;
+            margin-bottom: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            transition: transform 0.1s;
+            width: fit-content; 
+            max-width: 100%;
+            white-space: normal;
+        }
+        .appt-group .appt-chip:last-child {
+            margin-bottom: 0;
+        }
+        .appt-chip:hover {
+            transform: scale(1.01);
+            filter: brightness(0.95);
+        }
+        .bg-beauty { background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+        .bg-bath { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .bg-single { background-color: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+        /* [新增] 暫不接客的卡片樣式 */
+        .bg-blocked { background-color: #9ca3af; color: #ffffff; border: 1px solid #6b7280; } 
+        
+        /* Modal 動畫 */
+        .modal {
+            transition: opacity 0.25s ease;
+        }
+        body.modal-active {
+            overflow: hidden;
+        }
+
+        /* 讀取遮罩 */
+        .loader-overlay {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(2px);
+        }
+
+        /* 手機版優化 */
+        @media (max-width: 640px) {
+            .time-cell { width: 70px; font-size: 0.9rem; }
+            .content-cell { font-size: 0.9rem; }
+            .hidden-mobile { display: none; }
+        }
+        
+        /* 滾動條美化 */
+        #profile-list-container::-webkit-scrollbar { width: 6px; }
+        #profile-list-container::-webkit-scrollbar-track { background: #f1f1f1; }
+        #profile-list-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        #profile-list-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* 公休設定日曆樣式：反灰 */
+        .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange, .flatpickr-day.selected.inRange {
+            background: #9ca3af !important; border-color: #9ca3af !important; color: #fff;
+        }
+        
+        /* 營業日按鈕滾動條 */
+        #business-days-container::-webkit-scrollbar { height: 4px; }
+        #business-days-container::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+        
+        /* 美容已滿按鈕樣式 */
+        .btn-full-active {
+            background-color: #ef4444 !important; color: white !important; border-color: #dc2626 !important;
+        }
+        
+        /* 當日已滿時，表格背景微調 */
+        .schedule-full-bg {
+            background-color: #fef2f2;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- 頂部導航列 -->
+    <header class="bg-white shadow-sm z-20 sticky top-0">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            
+            <!-- 左側區塊：Logo + 標題 + 支持區塊 -->
+            <div class="flex items-center gap-6">
+                <!-- Logo & Title -->
+                <div class="flex items-center gap-3">
+                    <img src="icon.ico" alt="Logo" class="w-12 h-12 rounded-lg object-contain">
+                    <div>
+                        <h1 class="text-lg font-bold leading-tight">美容預約表</h1>
+                        <div class="text-xs text-gray-500" id="current-store-name">讀取中...</div>
+                    </div>
+                </div>
+
+                <!-- 支持區塊 (頭像+IG連結) -->
+                <div class="hidden md:flex items-center gap-3 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-100">
+                    <!-- 4張頭像 (圓形重疊) -->
+                    <div class="flex -space-x-2">
+                        <img src="4.ico" class="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" alt="Support 4">
+                        <img src="3.ico" class="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" alt="Support 3">
+                        <img src="2.ico" class="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" alt="Support 2">
+                        <img src="1.ico" class="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" alt="Support 1">
+                    </div>
+                    
+                    <!-- 文字與 IG 圖示 -->
+                    <a href="https://www.instagram.com/tsikkong/?igsh=MTdqYmV6YmNoeGhpZg%3D%3D&utm_source=qr" target="_blank" class="flex items-center gap-1.5 text-sm text-blue-600 font-medium hover:text-blue-800 hover:underline transition">
+                        <i class="fa-brands fa-instagram text-lg"></i>
+                        <span>沒有要斗內，但可以點進來支持一下</span>
+                    </a>
+                </div>
+            </div>
+            
+            <!-- 右側區塊：控制項 -->
+            <div class="flex items-center gap-2">
+                <select id="store-select" class="form-select text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                    <option value="">載入分店...</option>
+                </select>
+                <button id="lock-store-btn" class="text-gray-400 hover:text-blue-600 transition" title="鎖定分店">
+                    <i class="fa-solid fa-lock-open" id="lock-icon"></i>
+                </button>
+                <button onclick="toggleSidebar()" class="ml-2 p-2 text-gray-600 hover:bg-gray-100 rounded-full lg:hidden">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 日期導航與公休設定列 -->
+        <div class="bg-gray-50 border-t border-gray-200 px-4 py-2 flex items-center gap-4 overflow-hidden">
+            <!-- 左側：快速跳轉 -->
+            <div class="flex-shrink-0 relative group">
+                <label class="block text-xs text-gray-400 font-bold mb-0.5 ml-1">快速跳轉</label>
+                <div class="flex items-center bg-white border border-gray-300 rounded-md shadow-sm hover:border-blue-400 transition cursor-pointer">
+                    <i class="fa-regular fa-calendar text-gray-500 pl-3"></i>
+                    <input type="text" id="nav-date-picker" class="w-28 text-center font-bold text-gray-700 border-none focus:ring-0 cursor-pointer py-1.5 text-sm" readonly placeholder="選擇日期">
+                </div>
+            </div>
+
+            <!-- 右側：營業日按鈕列 -->
+            <div class="flex-1 flex items-center gap-2 overflow-x-auto pb-1" id="business-days-container">
+                <div class="text-sm text-gray-400">載入營業日...</div>
+            </div>
+        </div>
+        <!-- 統計數據 -->
+        <div class="bg-white border-t border-gray-100 px-4 py-2 flex justify-start items-center gap-3 text-xs font-medium text-gray-600 overflow-x-auto">
+             <span class="px-2 py-0.5 bg-gray-50 text-gray-700 rounded-full border border-gray-200">總筆數: <span id="stat-total">0</span></span>
+             <span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full border border-blue-100">美容: <span id="stat-beauty">0</span></span>
+             <span class="px-2 py-0.5 bg-green-50 text-green-700 rounded-full border border-green-100">洗澡: <span id="stat-bath">0</span></span>
+             <span class="px-2 py-0.5 bg-yellow-50 text-yellow-700 rounded-full border border-yellow-100">單項: <span id="stat-single">0</span></span>
+        </div>
+    </header>
+
+    <!-- 主內容區 -->
+    <main class="flex-1 overflow-hidden flex relative">
+        
+        <!-- 左側：日程表 -->
+        <div class="flex-1 overflow-y-auto p-2 md:p-4 relative" id="schedule-container">
+            
+            <!-- 預約表格上方的功能列 -->
+            <div class="mb-4 px-1">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="inline-flex items-center cursor-pointer bg-white border border-red-200 px-3 py-1.5 rounded-full hover:bg-red-50 transition shadow-sm">
+                        <input type="checkbox" id="is-full-checkbox" class="form-checkbox h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500">
+                        <span class="ml-2 text-sm font-bold text-red-600">美容已滿 (禁止新增)</span>
+                    </label>
+                    <div class="text-xs text-gray-400">預約內容 (點擊空白處新增)</div>
+                </div>
+                
+                <!-- 當日備註區塊 -->
+                <div class="bg-white border border-gray-200 rounded-lg p-2 shadow-sm">
+                    <div class="flex items-center gap-2 mb-1">
+                        <i class="fa-regular fa-calendar-check text-blue-500"></i>
+                        <label class="text-sm font-bold text-gray-700">當日備註</label>
+                    </div>
+                    <textarea id="daily-note" rows="2" class="w-full p-2 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none" placeholder="例如：今日人手不足... (自動儲存)"></textarea>
+                </div>
+            </div>
+
+            <!-- 讀取遮罩 (修正版) -->
+            <div id="loader" class="loader-overlay absolute inset-0 z-30 flex flex-col items-center justify-center hidden">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-3"></div>
+                <p class="text-gray-600 font-medium" id="loader-text">資料同步中...</p>
+            </div>
+
+            <!-- 公休提示 -->
+            <div id="day-off-banner" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded shadow-sm" role="alert">
+                <p class="font-bold"><i class="fa-solid fa-mug-hot mr-2"></i>本日公休</p>
+                <p>如需預約請選擇其他日期。</p>
+            </div>
+
+            <!-- 日程表格 -->
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th class="w-20 text-center">時間</th>
+                        <th></th> 
+                    </tr>
+                </thead>
+                <tbody id="schedule-body">
+                    <!-- JS 動態生成 -->
+                </tbody>
+            </table>
+            
+            <div class="h-20"></div>
+        </div>
+
+        <!-- 右側滑動側邊欄 -->
+        <div id="sidebar" class="absolute inset-y-0 right-0 w-96 bg-white shadow-xl border-l border-gray-200 transform translate-x-full transition-transform duration-300 ease-in-out z-40 flex flex-col lg:static lg:translate-x-0">
+            <div class="p-3 bg-gray-50 border-b flex justify-between items-center">
+                <h3 class="font-bold text-lg text-gray-700"><i class="fa-solid fa-sliders mr-2"></i>功能面板</h3>
+                <button onclick="toggleSidebar()" class="text-gray-500 hover:text-gray-700 lg:hidden">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-hidden flex flex-col">
+                <!-- 特別注意事項區塊 -->
+                <div class="flex-1 flex flex-col min-h-0 bg-gray-50">
+                    <div class="p-3 bg-white border-b border-gray-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-bold text-gray-700">
+                                <i class="fa-solid fa-book-medical mr-1"></i>特別注意事項
+                            </h4>
+                            <button onclick="openProfileModal()" class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 transition shadow-sm flex items-center">
+                                <i class="fa-solid fa-plus mr-1"></i>新增
+                            </button>
+                        </div>
+                        <div class="relative">
+                            <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
+                            <input type="text" id="profile-search" oninput="filterProfileList()" placeholder="搜尋品種或名字..." class="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    <div id="profile-list-container" class="flex-1 overflow-y-auto p-2 space-y-2">
+                        <div class="text-center text-gray-400 text-sm py-4">讀取中...</div>
+                    </div>
+                </div>
+
+                <!-- [新增] 固定預約區塊 -->
+                <div class="p-3 bg-white border-t border-gray-100">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-bold text-gray-700">
+                            <i class="fa-solid fa-calendar-check mr-1"></i>固定預約
+                        </h4>
+                        <button onclick="openRecurringModal()" class="text-sm bg-purple-600 text-white px-3 py-1.5 rounded-md hover:bg-purple-700 transition shadow-sm flex items-center">
+                            <i class="fa-solid fa-plus mr-1"></i>新增
+                        </button>
+                    </div>
+                    <div class="text-xs text-gray-500">批次建立固定時段的預約</div>
+                </div>
+
+                <!-- [新增] 公告生成器區塊 -->
+                <div class="p-3 bg-white border-t border-gray-100">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-bold text-gray-700">
+                            <i class="fa-solid fa-bullhorn mr-1"></i>公休公告
+                        </h4>
+                        <button onclick="openAnnouncementModal()" class="text-sm bg-orange-500 text-white px-3 py-1.5 rounded-md hover:bg-orange-600 transition shadow-sm flex items-center">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>生成
+                        </button>
+                    </div>
+                    <div class="text-xs text-gray-500">生成當月公休圖片</div>
+                </div>
+
+                <!-- 公休設定區塊 -->
+                <div class="p-3 bg-white border-t border-gray-100">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">
+                        <i class="fa-regular fa-calendar-xmark mr-1"></i>公休設定
+                    </label>
+                    <div class="flex items-center bg-gray-50 border border-gray-300 rounded-md shadow-sm hover:border-blue-400 transition cursor-pointer">
+                         <input type="text" id="sidebar-dayoff-picker" class="w-full text-center font-medium text-gray-700 bg-transparent border-none focus:ring-0 cursor-pointer py-2 text-sm" readonly placeholder="點擊設定公休">
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1 text-center">點選日期以切換公休狀態</div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden transition-opacity lg:hidden"></div>
+    </main>
+
+    <!-- 懸浮新增按鈕 -->
+    <button onclick="openAppointmentModal()" class="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-blue-700 transition md:hidden z-20">
+        <i class="fa-solid fa-plus text-xl"></i>
+    </button>
+
+    <!-- Modals -->
+    <div id="appointment-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true"><div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"><div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeAppointmentModal()"></div><span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span><div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full"><div class="bg-gray-50 px-4 py-3 border-b flex justify-between items-center"><h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title"><i class="fa-regular fa-calendar-plus mr-2"></i><span id="appt-modal-title">新增預約</span></h3><button onclick="closeAppointmentModal()" class="text-gray-400 hover:text-gray-500"><i class="fa-solid fa-xmark text-xl"></i></button></div><div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4 max-h-[70vh] overflow-y-auto"><form id="appointment-form" class="space-y-4"><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">日期</label><input type="text" id="appt-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 cursor-not-allowed" readonly></div><div><label class="block text-sm font-medium text-gray-700">時間</label><select id="appt-time" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"></select></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="col-span-2"><label class="block text-sm font-medium text-gray-700">電話號碼</label><input type="tel" id="appt-phone" placeholder="0912345678" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 p-2 border"></div><div class="flex items-center pt-6"><label class="inline-flex items-center"><input type="checkbox" id="appt-is-app" class="form-checkbox h-5 w-5 text-blue-600 rounded"><span class="ml-2 text-gray-700 text-sm">APP預約</span></label></div></div>
+    <!-- [新增] 該時段暫時不接 勾選 -->
+    <div class="flex items-center">
+        <input type="checkbox" id="is-blocked" class="form-checkbox h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500 mr-2">
+        <label for="is-blocked" class="text-sm font-bold text-red-600 cursor-pointer">⛔ 該時段暫時不接 (鎖定)</label>
+    </div>
+    <hr class="border-gray-200"><div id="pets-container" class="space-y-4"></div><button type="button" onclick="addPetField()" class="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-500 hover:text-blue-500 text-sm font-medium transition"><i class="fa-solid fa-plus mr-1"></i> 新增第二隻寵物</button><input type="hidden" id="delete-row-ids"></form></div><div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2"><button type="button" id="btn-save-appt" onclick="submitAppointment()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">儲存預約</button><button type="button" id="btn-delete-appt" onclick="deleteCurrentAppointment()" class="hidden w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">刪除此預約</button><button type="button" onclick="closeAppointmentModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">取消</button></div></div></div></div>
+    <div id="profile-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"><div class="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white"><div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold" id="profile-modal-title">新增注意事項</h3><button onclick="document.getElementById('profile-modal').classList.add('hidden')" class="text-gray-500 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button></div><div class="bg-gray-50 p-4 rounded mb-4"><form id="profile-form" class="space-y-3"><input type="hidden" name="id" id="profile-id"><div class="grid grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-gray-700 mb-1">品種</label><input type="text" name="breed" id="profile-breed" placeholder="如:貴賓" class="w-full border p-2 rounded text-sm focus:ring-blue-500 focus:border-blue-500"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">寵物名</label><input type="text" name="name" id="profile-name" placeholder="如:寶寶" class="w-full border p-2 rounded text-sm focus:ring-blue-500 focus:border-blue-500"></div></div><div><label class="block text-sm font-medium text-gray-700 mb-1">注意事項內容</label><textarea name="notes" id="profile-notes" placeholder="例如：會咬人、怕吹風機..." class="w-full border p-2 rounded text-sm focus:ring-blue-500 focus:border-blue-500" rows="3"></textarea></div><div class="flex gap-2 pt-2"><button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition font-medium">儲存</button><button type="button" onclick="document.getElementById('profile-modal').classList.add('hidden')" class="px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition">取消</button></div></form></div></div></div>
+
+    <!-- 固定預約 Modal -->
+    <div id="recurring-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"><div class="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white"><div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold text-purple-700"><i class="fa-solid fa-repeat mr-2"></i>新增固定預約 (批次)</h3><button onclick="document.getElementById('recurring-modal').classList.add('hidden')" class="text-gray-500 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button></div><div class="bg-purple-50 p-4 rounded mb-4 border border-purple-100"><form id="recurring-form" class="space-y-4">
+        <!-- 日期區間與時間 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div><label class="block text-sm font-medium text-gray-700">開始日期</label><input type="text" id="recur-start-date" class="w-full border p-2 rounded" placeholder="選擇開始日"></div>
+            <div><label class="block text-sm font-medium text-gray-700">結束日期</label><input type="text" id="recur-end-date" class="w-full border p-2 rounded" placeholder="選擇結束日"></div>
+            <div><label class="block text-sm font-medium text-gray-700">預約時間</label><select id="recur-time" class="w-full border p-2 rounded"></select></div>
+        </div>
+        <!-- 星期選擇 -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">重複週期 (請勾選)</label>
+            <div class="flex flex-wrap gap-4">
+                <label class="inline-flex items-center"><input type="checkbox" name="recur-day" value="1" class="form-checkbox text-purple-600"><span class="ml-2">週一</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" name="recur-day" value="2" class="form-checkbox text-purple-600"><span class="ml-2">週二</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" name="recur-day" value="3" class="form-checkbox text-purple-600"><span class="ml-2">週三</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" name="recur-day" value="4" class="form-checkbox text-purple-600"><span class="ml-2">週四</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" name="recur-day" value="5" class="form-checkbox text-purple-600"><span class="ml-2">週五</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" name="recur-day" value="6" class="form-checkbox text-purple-600"><span class="ml-2">週六</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" name="recur-day" value="0" class="form-checkbox text-purple-600"><span class="ml-2">週日</span></label>
+            </div>
+        </div>
+        <hr class="border-purple-200">
+        <!-- 聯絡資料 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="col-span-2"><label class="block text-sm font-medium text-gray-700">電話號碼</label><input type="tel" id="recur-phone" class="w-full border p-2 rounded" placeholder="0912345678"></div>
+            <div class="flex items-center pt-6"><label class="inline-flex items-center"><input type="checkbox" id="recur-is-app" class="form-checkbox h-5 w-5 text-blue-600 rounded"><span class="ml-2 text-gray-700 text-sm">APP預約</span></label></div>
+        </div>
+        <!-- 寵物資料 (單隻，簡化版) -->
+        <div class="bg-white p-3 rounded border border-gray-200">
+            <h4 class="text-sm font-bold text-gray-600 mb-2">寵物資料</h4>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+                <select id="recur-species" class="w-full border p-2 rounded"><option value="狗">🐶 狗</option><option value="貓">🐱 貓</option><option value="兔子">🐰 兔子</option></select>
+                <!-- [修改] 調整選項順序: 洗澡, 美容, 單項 -->
+                <select id="recur-service" class="w-full border p-2 rounded">
+                    <option value="洗澡">🚿 洗澡</option>
+                    <option value="美容">✂️ 美容</option>
+                    <option value="單項">💅 單項</option>
+                </select>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+                <input type="text" id="recur-breed" class="w-full border p-2 rounded" placeholder="品種">
+                <input type="text" id="recur-pet-name" class="w-full border p-2 rounded" placeholder="寵物名">
+            </div>
+            <textarea id="recur-notes" class="w-full border p-2 rounded" rows="1" placeholder="備註..."></textarea>
+        </div>
+        <div class="flex gap-2 pt-2">
+            <button type="button" onclick="handleSaveRecurringAppointment()" class="flex-1 bg-purple-600 text-white py-2 rounded hover:bg-purple-700 transition">開始批次建立</button>
+            <button type="button" onclick="document.getElementById('recurring-modal').classList.add('hidden')" class="px-4 bg-gray-200 rounded hover:bg-gray-300 transition">取消</button>
+        </div>
+    </form></div></div></div></div>
+
+    <!-- [*** 新增 ***] 公告生成器 Modal -->
+    <div id="announcement-modal" class="hidden fixed inset-0 bg-gray-800 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <!-- 容器：相對定位以便放置關閉按鈕 -->
+        <div class="relative w-full max-w-4xl rounded-lg shadow-2xl flex bg-white overflow-hidden max-h-[90vh]">
+            
+            <!-- [修改] 絕對定位的關閉按鈕 (右上角) -->
+            <button onclick="document.getElementById('announcement-modal').classList.add('hidden')" 
+                    class="absolute top-4 right-4 z-50 text-gray-500 hover:text-gray-800 bg-white/80 rounded-full p-2 hover:bg-white transition shadow-sm">
+                <i class="fa-solid fa-xmark text-2xl"></i>
+            </button>
+
+            <!-- 左側設定區 -->
+            <div class="w-1/3 bg-gray-50 p-5 border-r border-gray-200 overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-gray-800">公休公告設定</h3>
+                    <!-- 這裡原本的按鈕可以拿掉，或保留作為備用 -->
+                </div>
+
+                <div class="space-y-6">
+                    <!-- 模板選擇 -->
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">選擇風格</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="setAnnouncementTemplate('regular')" class="p-3 border-2 border-blue-100 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-center group focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <div class="w-full h-16 bg-gradient-to-b from-blue-50 to-blue-100 rounded mb-2 group-hover:shadow-sm"></div>
+                                <span class="text-sm font-medium text-gray-700">常規版</span>
+                            </button>
+                            <button onclick="setAnnouncementTemplate('newyear')" class="p-3 border-2 border-red-100 rounded-lg hover:border-red-500 hover:bg-red-50 transition text-center group focus:outline-none focus:ring-2 focus:ring-red-500">
+                                <div class="w-full h-16 bg-gradient-to-b from-red-700 to-red-500 rounded mb-2 group-hover:shadow-sm"></div>
+                                <span class="text-sm font-medium text-gray-700">新年版</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 自訂背景 -->
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">自訂背景 (選填)</label>
+                        <div class="relative">
+                            <input type="file" id="announce-bg-upload" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">上傳圖片將覆蓋預設風格</p>
+                    </div>
+
+                    <!-- 底部資訊設定 -->
+                    <div class="bg-white p-3 rounded-lg border border-gray-200">
+                        <label class="block text-sm font-bold text-gray-700 mb-3">底部資訊 (即時更新)</label>
+                        <div class="space-y-3">
+                            <input type="text" id="announce-line1" class="w-full border p-2 rounded text-sm" placeholder="預約專線" oninput="updateRenderOptions()">
+                            <input type="text" id="announce-line2" class="w-full border p-2 rounded text-sm" placeholder="LINE官方帳號" oninput="updateRenderOptions()">
+                            <input type="text" id="announce-line3" class="w-full border p-2 rounded text-sm" placeholder="FACEBOOK官方專頁" oninput="updateRenderOptions()">
+                            <input type="text" id="announce-line4" class="w-full border p-2 rounded text-sm" placeholder="營業時間" oninput="updateRenderOptions()">
+                        </div>
+                    </div>
+
+                    <!-- 下載按鈕 -->
+                    <div class="pt-4 border-t border-gray-200">
+                        <button onclick="downloadAnnouncement()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-lg flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-download"></i> 下載圖片
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側預覽區 -->
+            <div class="w-2/3 bg-gray-200 flex items-center justify-center p-8 overflow-auto">
+                <div class="shadow-2xl">
+                    <canvas id="announce-canvas" class="max-w-full h-auto rounded-lg"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS 邏輯 -->
+    <script src="announcement.js"></script>
+    <script>
+        // 設定區
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxZ8Z16SBwAxn0AeycM6VxRLrOyO8Hy9vJ2U4PQkEq8n8GNFZFViYneIT8yQTo5hitX7A/exec';
+        
+        // 宣告全域變數 (避免 ReferenceError)
+        let allStores = [];
+        let currentStoreId = null;
+        let currentDate = new Date();
+        let currentViewMonthDate = new Date();
+        let currentAppointments = [];
+        let currentDaysOff = [];
+        let allPetProfiles = [];
+        let storeConfig = { start: "09:00", end: "21:00", unit: 60 };
+        let isCurrentDateFull = false;
+        let scheduleCache = {};
+        let fullDatesCache = {}; 
+
+        // DOM 元素變數宣告
+        let storeSelect, navDatePickerInput, businessDaysContainer, scheduleBody, loader, loaderText, lockBtn, lockIcon, modal, dailyNoteInput, isFullCheckbox;
+        // 固定預約相關變數
+        let recurStartDatePicker, recurEndDatePicker, recurTimeSelect, saveAppointmentBtn;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 初始化 DOM 變數
+            storeSelect = document.getElementById('store-select');
+            navDatePickerInput = document.getElementById('nav-date-picker');
+            businessDaysContainer = document.getElementById('business-days-container');
+            scheduleBody = document.getElementById('schedule-body');
+            loader = document.getElementById('loader');
+            loaderText = document.getElementById('loader-text');
+            lockBtn = document.getElementById('lock-store-btn');
+            lockIcon = document.getElementById('lock-icon');
+            modal = document.getElementById('appointment-modal'); 
+            dailyNoteInput = document.getElementById('daily-note');
+            isFullCheckbox = document.getElementById('is-full-checkbox');
+            recurTimeSelect = document.getElementById('recur-time');
+            saveAppointmentBtn = document.getElementById('btn-save-appt');
+
+            initDatePickers();
+            
+            // 初始化公告生成器
+            if (typeof initAnnouncementGenerator === 'function') {
+                initAnnouncementGenerator();
+            }
+
+            try {
+                await fetchStoreData();
+            } catch (e) {
+                console.error('Init Error:', e);
+                Swal.fire('系統錯誤', '無法載入初始資料，請重新整理網頁', 'error');
+            } finally {
+                toggleLoader(false); 
+            }
+            
+            storeSelect.addEventListener('change', handleStoreChange);
+            lockBtn.addEventListener('click', toggleStoreLock);
+            dailyNoteInput.addEventListener('change', saveDailyNote);
+            isFullCheckbox.addEventListener('change', handleIsFullChange);
+            document.getElementById('appointment-form').addEventListener('submit', (e) => e.preventDefault());
+            document.getElementById('profile-form').addEventListener('submit', handleProfileSubmit);
+        });
+
+        async function apiCall(action, params = {}, method = 'GET') {
+            if (action !== 'getStoreData' && currentStoreId) params.storeId = currentStoreId;
+            let url = WEB_APP_URL;
+            const options = { method, mode: 'cors' };
+            if (method === 'GET') {
+                const query = new URLSearchParams({ action, ...params, t: new Date().getTime() });
+                url += `?${query}`;
+            } else {
+                options.body = JSON.stringify({ action, ...params });
+                options.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
+            }
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); 
+            options.signal = controller.signal;
+
+            try {
+                const res = await fetch(url, options);
+                clearTimeout(timeoutId);
+                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+                const json = await res.json();
+                if (json.status !== 'success') throw new Error(json.message || 'API 回傳失敗');
+                return json.data;
+            } catch (err) {
+                clearTimeout(timeoutId);
+                if (err.name === 'AbortError') throw new Error('連線逾時，請檢查網路或稍後再試');
+                throw err;
+            }
+        }
+
+        async function fetchStoreData() {
+            toggleLoader(true, '讀取分店資料...');
+            try {
+                allStores = await apiCall('getStoreData');
+                if (!allStores || allStores.length === 0) throw new Error('找不到分店資料');
+
+                storeSelect.innerHTML = '<option value="">請選擇分店</option>';
+                allStores.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id; opt.text = s.name; storeSelect.appendChild(opt);
+                });
+
+                const lockedId = localStorage.getItem('petStore_lockedId');
+                let targetStoreId = null;
+                if (lockedId && allStores.find(s => s.id === lockedId)) {
+                    targetStoreId = lockedId; toggleStoreLock(true);
+                } else if(allStores.find(s => s.id === 'S5100')) {
+                    targetStoreId = 'S5100';
+                }
+                
+                if (targetStoreId) {
+                    storeSelect.value = targetStoreId;
+                    await handleStoreChange();
+                } else {
+                    toggleLoader(false);
+                }
+            } catch (e) {
+                console.error(e);
+                Swal.fire('載入失敗', e.message, 'error');
+            }
+        }
+
+        async function handleStoreChange() {
+            currentStoreId = storeSelect.value;
+            if (!currentStoreId) { toggleLoader(false); return; }
+
+            const store = allStores.find(s => s.id === currentStoreId);
+            if (store) {
+                storeConfig = { start: store.startTime || "09:00", end: store.endTime || "21:00", unit: parseInt(store.timeUnit) || 60 };
+                document.getElementById('current-store-name').innerText = store.name;
+            }
+            
+            scheduleCache = {}; 
+            fullDatesCache = {};
+            generateTimeSlotsOption();
+            
+            toggleLoader(true, '載入店鋪資料...');
+            try {
+                await Promise.all([ fetchDaysOff(), fetchPetProfiles(), loadSchedule(false) ]);
+            } catch(e) {
+                console.error("Store Change Error", e);
+                Swal.fire('錯誤', '切換分店時發生錯誤', 'error');
+            } finally {
+                toggleLoader(false);
+            }
+        }
+
+        function toggleStoreLock(forceState) {
+            let isLocked;
+            if (typeof forceState === 'boolean') isLocked = forceState;
+            else isLocked = !storeSelect.disabled;
+            storeSelect.disabled = isLocked;
+            if (isLocked) {
+                lockIcon.className = 'fa-solid fa-lock';
+                if(storeSelect.value) localStorage.setItem('petStore_lockedId', storeSelect.value);
+            } else {
+                lockIcon.className = 'fa-solid fa-lock-open';
+                localStorage.removeItem('petStore_lockedId');
+            }
+        }
+
+        async function loadSchedule(handleLoading = true) {
+            if (!currentStoreId) return;
+            const dateStr = formatDate(currentDate);
+            document.getElementById('day-off-banner').classList.add('hidden');
+            renderBusinessDayButtons(); 
+
+            if (scheduleCache[dateStr]) {
+                const cached = scheduleCache[dateStr];
+                currentAppointments = cached.appts;
+                processDailyNote(cached.note || ''); 
+                checkDayOffAndRender(dateStr);
+                updateBusinessDayButtonFullStatus(dateStr, isCurrentDateFull);
+                if(handleLoading) toggleLoader(false);
+                return; 
+            }
+
+            if(handleLoading) toggleLoader(true, '同步預約資料...');
+            try {
+                const [appts, note] = await Promise.all([
+                    apiCall('getAppointments', { date: dateStr }),
+                    apiCall('getDailyNote', { date: dateStr })
+                ]);
+                currentAppointments = groupAppointments(appts);
+                processDailyNote(note || '');
+                scheduleCache[dateStr] = { appts: currentAppointments, note: note || '' };
+                fullDatesCache[dateStr] = isCurrentDateFull;
+                checkDayOffAndRender(dateStr);
+                updateBusinessDayButtonFullStatus(dateStr, isCurrentDateFull);
+            } catch (e) {
+                console.error(e);
+                if(handleLoading) Swal.fire('讀取失敗', '無法取得預約資料，請稍後再試', 'error');
+            } finally {
+                if(handleLoading) toggleLoader(false);
+            }
+        }
+        
+        function processDailyNote(note) {
+            if (note.startsWith('[FULL]')) {
+                isCurrentDateFull = true; isFullCheckbox.checked = true; dailyNoteInput.value = note.substring(6);
+            } else {
+                isCurrentDateFull = false; isFullCheckbox.checked = false; dailyNoteInput.value = note;
+            }
+        }
+        
+        function checkDayOffAndRender(dateStr) {
+            const isDayOff = currentDaysOff.includes(dateStr);
+            if (isDayOff) document.getElementById('day-off-banner').classList.remove('hidden');
+            renderTable();
+            updateStats();
+        }
+
+        function renderTable() {
+            scheduleBody.innerHTML = '';
+            const times = generateTimeSlots();
+            if (isCurrentDateFull) document.getElementById('schedule-container').classList.add('schedule-full-bg');
+            else document.getElementById('schedule-container').classList.remove('schedule-full-bg');
+            
+            times.forEach(time => {
+                const tr = document.createElement('tr');
+                const tdTime = document.createElement('td');
+                tdTime.className = 'time-cell'; tdTime.textContent = time; tr.appendChild(tdTime);
+                const tdContent = document.createElement('td');
+                tdContent.className = 'content-cell';
+                
+                const appointments = currentAppointments.filter(app => app.time === time);
+                
+                const isBlockedSlot = appointments.some(app => app.services.includes('暫不接'));
+                if (isBlockedSlot) {
+                    tdContent.classList.add('content-cell-blocked');
+                }
+
+                if (appointments.length > 0) {
+                    appointments.forEach(app => {
+                        const groupDiv = document.createElement('div');
+                        groupDiv.className = 'appt-group';
+                        
+                        app.pets.forEach(pet => {
+                            if (pet.service === '暫不接') {
+                                const chip = document.createElement('div');
+                                chip.className = 'appt-chip bg-blocked'; 
+                                chip.innerHTML = `<div class="font-bold text-sm w-full flex justify-between items-center"><span>⛔ 暫不接客</span></div>`;
+                                chip.onclick = (e) => { e.stopPropagation(); openAppointmentModal(app); }; 
+                                groupDiv.appendChild(chip);
+                                return;
+                            }
+
+                            const chip = document.createElement('div');
+                            const serviceClass = getServiceColorClass(pet.service);
+                            chip.className = `appt-chip ${serviceClass}`;
+                            
+                            let icon = ''; 
+                            if (pet.species === '狗') icon = '<i class="fa-solid fa-dog text-lg text-gray-500 mr-1"></i>';
+                            else if (pet.species === '貓') icon = '<i class="fa-solid fa-cat text-lg text-gray-500 mr-1"></i>';
+                            else if (pet.species === '兔子') icon = '<span class="text-lg mr-1">🐰</span>';
+
+                            const line1 = [pet.species, pet.breed, pet.name, pet.service].filter(v => v && v !== '未填').join(' ');
+                            
+                            let phoneDisplay = (app.phone || '').toString();
+                            if (phoneDisplay.length === 9 && phoneDisplay.startsWith('9')) {
+                                phoneDisplay = '0' + phoneDisplay;
+                            }
+                            if (phoneDisplay.length === 8) {
+                                phoneDisplay = '0' + phoneDisplay;
+                            }
+
+                            const line2 = [phoneDisplay, pet.note].filter(v => v && v !== '未填').join(' ');
+                            const appBadge = app.isApp ? '<i class="fa-solid fa-mobile-screen ml-1 text-xs"></i>' : '';
+                            
+                            chip.innerHTML = `<div class="font-bold text-sm w-full flex justify-between items-center"><div class="flex items-center">${icon}<span>${line1 || '無資料'}</span></div><span>${appBadge}</span></div><div class="text-xs opacity-90 mt-1 break-all pl-6">${line2}</div>`;
+                            
+                            chip.onclick = (e) => { e.stopPropagation(); openAppointmentModal(app); };
+                            groupDiv.appendChild(chip);
+                        });
+                        tdContent.appendChild(groupDiv);
+                    });
+                    
+                    tdContent.onclick = (e) => {
+                        if (isCurrentDateFull) { Swal.fire('無法新增', '本日美容預約已滿', 'warning'); return; }
+                        if (isBlockedSlot) { return; }
+                        // [新增] 檢查是否為公休日
+                        const dateStr = formatDate(currentDate);
+                        if (currentDaysOff.includes(dateStr)) {
+                            Swal.fire('無法新增', '本日已設為公休', 'warning');
+                            return;
+                        }
+                        if(e.target === tdContent || e.target.classList.contains('appt-group')) openAppointmentModal(null, time);
+                    };
+                } else {
+                    tdContent.onclick = () => {
+                        if (isCurrentDateFull) { Swal.fire('無法新增', '本日美容預約已滿', 'warning'); return; }
+                        // [新增] 檢查是否為公休日
+                        const dateStr = formatDate(currentDate);
+                        if (currentDaysOff.includes(dateStr)) {
+                            Swal.fire('無法新增', '本日已設為公休', 'warning');
+                            return;
+                        }
+                        openAppointmentModal(null, time);
+                    };
+                    
+                    // [新增] 只有非公休日才顯示提示文字
+                    const dateStr = formatDate(currentDate);
+                    if (!isCurrentDateFull && !currentDaysOff.includes(dateStr)) {
+                        tdContent.innerHTML = `<span class="text-gray-300 text-sm hidden-mobile hover:text-gray-400"><i class="fa-solid fa-plus"></i> 點擊空白處新增</span>`;
+                    }
+                }
+                tr.appendChild(tdContent); scheduleBody.appendChild(tr);
+            });
+        }
+
+        function groupAppointments(rawData) {
+            const groups = {};
+            rawData.forEach((item, idx) => {
+                const time = formatTime(item['時間']);
+                const phone = item['連絡電話'];
+                const key = (phone !== '未填' && phone !== '' && phone !== undefined)
+                    ? `${time}-${phone}` 
+                    : `${time}-NO-PHONE-${idx}`;
+
+                if (!groups[key]) groups[key] = { key: key, time: time, phone: phone, isApp: item['APP預約'] === 'Y', pets: [], services: [], notes: [], rowIDs: [] };
+                groups[key].pets.push({ breed: item['品種'], name: item['寵物名'], species: item['種類'], service: item['服務內容'], note: item['備註'] });
+                groups[key].services.push(item['服務內容']); groups[key].notes.push(item['備註']); groups[key].rowIDs.push(item.rowID);
+            });
+            return Object.values(groups);
+        }
+        
+        function openAppointmentModal(existingAppt = null, timeSlot = '') {
+            const modalTitle = document.getElementById('appt-modal-title');
+            const dateField = document.getElementById('appt-date');
+            const timeField = document.getElementById('appt-time');
+            const phoneField = document.getElementById('appt-phone');
+            const isAppField = document.getElementById('appt-is-app');
+            const deleteBtn = document.getElementById('btn-delete-appt');
+            const deleteIdsField = document.getElementById('delete-row-ids');
+            const petsContainer = document.getElementById('pets-container');
+            const isBlockedCheckbox = document.getElementById('is-blocked'); 
+            
+            if (!modal) modal = document.getElementById('appointment-modal');
+
+            dateField.value = formatDate(currentDate);
+            phoneField.value = '';
+            isAppField.checked = false;
+            isBlockedCheckbox.checked = false; 
+            deleteIdsField.value = '';
+            petsContainer.innerHTML = '';
+            
+            if (existingAppt) {
+                modalTitle.innerText = "編輯/檢視預約";
+                timeField.value = existingAppt.time;
+                phoneField.value = existingAppt.phone;
+                isAppField.checked = existingAppt.isApp;
+                deleteBtn.classList.remove('hidden');
+                deleteIdsField.value = JSON.stringify(existingAppt.rowIDs);
+                
+                if (existingAppt.services.includes('暫不接')) {
+                    isBlockedCheckbox.checked = true;
+                }
+                
+                existingAppt.pets.forEach((pet) => { 
+                    if(pet.service !== '暫不接') addPetField(pet); 
+                });
+            } else {
+                modalTitle.innerText = "新增預約";
+                timeField.value = timeSlot || generateTimeSlots()[0];
+                deleteBtn.classList.add('hidden');
+                addPetField();
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function closeAppointmentModal() {
+            if (!modal) modal = document.getElementById('appointment-modal');
+            modal.classList.add('hidden');
+        }
+        
+        function addPetField(data = null) {
+            const container = document.getElementById('pets-container');
+            const index = container.children.length + 1;
+            const div = document.createElement('div');
+            div.className = 'pet-entry bg-gray-50 p-3 rounded-lg border border-gray-200 relative mt-2';
+            div.innerHTML = `
+                <div class="flex justify-between mb-2">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wide">寵物 ${index}</h4>
+                    ${index > 1 ? '<button type="button" onclick="this.parentElement.parentElement.remove()" class="text-red-500 text-xs hover:text-red-700">移除</button>' : ''}
+                </div>
+                <div class="grid grid-cols-2 gap-2 mb-2">
+                    <select class="pet-species w-full rounded border-gray-300 text-sm p-1.5 border"><option value="狗">🐶 狗</option><option value="貓">🐱 貓</option><option value="兔子">🐰 兔子</option></select>
+                    <select class="pet-service w-full rounded border-gray-300 text-sm p-1.5 border">
+                        <option value="洗澡">🚿 洗澡</option>
+                        <option value="美容">✂️ 美容</option>
+                        <option value="單項">💅 單項</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-2 mb-2">
+                    <input type="text" class="pet-breed w-full rounded border-gray-300 text-sm p-1.5 border" placeholder="品種" oninput="checkPetNotes(this)">
+                    <input type="text" class="pet-name w-full rounded border-gray-300 text-sm p-1.5 border" placeholder="寵物名" oninput="checkPetNotes(this)">
+                </div>
+                <textarea class="pet-notes w-full rounded border-gray-300 text-sm p-1.5 border" rows="1" placeholder="備註..."></textarea>
+                <div class="pet-auto-note hidden mt-2 p-2 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-200"></div>
+            `;
+            container.appendChild(div);
+            if (data) {
+                div.querySelector('.pet-species').value = data.species || '狗';
+                div.querySelector('.pet-service').value = data.service || '洗澡';
+                div.querySelector('.pet-breed').value = data.breed || '';
+                div.querySelector('.pet-name').value = data.name || '';
+                div.querySelector('.pet-notes').value = data.note || '';
+                checkPetNotes(div.querySelector('.pet-breed'));
+            }
+        }
+
+        async function submitAppointment() {
+            const date = document.getElementById('appt-date').value;
+            const time = document.getElementById('appt-time').value;
+            const phone = document.getElementById('appt-phone').value;
+            const isApp = document.getElementById('appt-is-app').checked;
+            const deleteRowIds = document.getElementById('delete-row-ids').value;
+            const isBlocked = document.getElementById('is-blocked').checked; 
+            
+            let pets = [];
+            
+            if (isBlocked) {
+                pets.push({ species: '', breed: '', petName: '此時段不接', service: '暫不接', notes: '' });
+            } else {
+                document.querySelectorAll('.pet-entry').forEach(div => {
+                    const breed = div.querySelector('.pet-breed').value.trim();
+                    const name = div.querySelector('.pet-name').value.trim();
+                    const service = div.querySelector('.pet-service').value;
+                    if (breed || name || service) {
+                        pets.push({ species: div.querySelector('.pet-species').value, breed: breed, petName: name, service: service, notes: div.querySelector('.pet-notes').value });
+                    }
+                });
+            }
+
+            if (pets.length === 0) return Swal.fire('提示', '請至少填寫一隻寵物資料', 'warning');
+
+            if (saveAppointmentBtn) {
+                saveAppointmentBtn.disabled = true;
+                saveAppointmentBtn.textContent = '儲存中...';
+            }
+            
+            toggleLoader(true, '儲存預約中...');
+            try {
+                if (deleteRowIds) await apiCall('deleteAppointments', { rowIDs: JSON.parse(deleteRowIds) }, 'POST');
+                await apiCall('addAppointment', { date, time, phone, isApp, pets }, 'POST');
+                delete scheduleCache[date];
+                
+                const storeName = document.getElementById('current-store-name').innerText;
+                closeAppointmentModal();
+                Swal.fire({ 
+                    title: '成功', 
+                    text: `[${storeName}][${date}]預約已儲存`, 
+                    icon: 'success', 
+                    timer: 1500, 
+                    showConfirmButton: false 
+                });
+                
+                await loadSchedule(false);
+            } catch (e) {
+                Swal.fire('錯誤', '儲存失敗：' + e.message, 'error');
+            } finally {
+                if (saveAppointmentBtn) {
+                    saveAppointmentBtn.disabled = false;
+                    saveAppointmentBtn.textContent = '儲存預約';
+                }
+                toggleLoader(false);
+            }
+        }
+
+        async function deleteCurrentAppointment() {
+            const ids = document.getElementById('delete-row-ids').value;
+            const date = document.getElementById('appt-date').value;
+            if (!ids) return;
+            const result = await Swal.fire({ title: '確定刪除?', text: "刪除後無法復原", icon: 'warning', showCancelButton: true, confirmButtonText: '刪除', cancelButtonText: '取消' });
+            if (result.isConfirmed) {
+                toggleLoader(true, '刪除中...');
+                try {
+                    await apiCall('deleteAppointments', { rowIDs: JSON.parse(ids) }, 'POST');
+                    delete scheduleCache[date];
+                    closeAppointmentModal();
+                    await loadSchedule(false);
+                    Swal.fire('已刪除', '', 'success');
+                } catch(e) { Swal.fire('錯誤', '刪除失敗：' + e.message, 'error'); } finally { toggleLoader(false); }
+            }
+        }
+
+        async function fetchPetProfiles() {
+            try {
+                const profiles = await apiCall('getPetProfiles');
+                allPetProfiles = profiles;
+                renderProfileListSidebar();
+            } catch(e) {}
+        }
+        
+        function renderProfileListSidebar(filterText = '') {
+            const listContainer = document.getElementById('profile-list-container');
+            const searchVal = filterText.toLowerCase();
+            const filtered = allPetProfiles.filter(p => (p.breed && p.breed.toLowerCase().includes(searchVal)) || (p.name && p.name.toLowerCase().includes(searchVal)));
+            if(filtered.length === 0) { listContainer.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">無相符資料</div>'; return; }
+            listContainer.innerHTML = filtered.map(p => `
+                <div class="p-2 bg-white border border-gray-100 rounded-md hover:shadow-sm transition group relative">
+                    <div class="flex justify-between items-start">
+                        <div><div class="text-sm font-bold text-gray-800">${p.breed} - ${p.name}</div><div class="text-xs text-gray-500 mt-1 leading-relaxed">${p.notes}</div></div>
+                        <div class="opacity-0 group-hover:opacity-100 transition flex gap-1 bg-white pl-2">
+                             <button onclick="editProfile('${p.id}')" class="text-blue-500 hover:text-blue-700 p-1" title="編輯"><i class="fa-solid fa-pen"></i></button>
+                             <button onclick="deleteProfile('${p.id}')" class="text-red-500 hover:text-red-700 p-1" title="刪除"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>`).join('');
+        }
+        
+        function filterProfileList() { const text = document.getElementById('profile-search').value; renderProfileListSidebar(text); }
+        function openProfileModal() { document.getElementById('profile-modal-title').innerText = "新增注意事項"; document.getElementById('profile-form').reset(); document.getElementById('profile-id').value = ''; document.getElementById('profile-modal').classList.remove('hidden'); }
+        function editProfile(id) {
+            const p = allPetProfiles.find(x => x.id === id);
+            if(!p) return;
+            document.getElementById('profile-modal-title').innerText = "編輯注意事項";
+            document.getElementById('profile-id').value = p.id;
+            document.getElementById('profile-breed').value = p.breed;
+            document.getElementById('profile-name').value = p.name;
+            document.getElementById('profile-notes').value = p.notes;
+            document.getElementById('profile-modal').classList.remove('hidden');
+        }
+        async function handleProfileSubmit(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            const action = data.id ? 'updatePetProfile' : 'addPetProfile';
+            if(!data.breed && !data.name) return Swal.fire('提示', '請至少輸入品種或寵物名', 'warning');
+            document.getElementById('profile-modal').classList.add('hidden');
+            toggleLoader(true, '儲存注意事項...');
+            try { await apiCall(action, data, 'POST'); await fetchPetProfiles(); Swal.fire({ icon: 'success', title: '儲存成功', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 }); } catch(e) { Swal.fire('錯誤', '儲存失敗', 'error'); } finally { toggleLoader(false); }
+        }
+        async function deleteProfile(id) {
+             const res = await Swal.fire({ title: '確定刪除?', icon: 'warning', showCancelButton: true, confirmButtonText: '刪除', cancelButtonText: '取消', confirmButtonColor: '#d33' });
+             if(res.isConfirmed) { toggleLoader(true, '刪除中...'); try { await apiCall('deletePetProfile', {id}, 'POST'); await fetchPetProfiles(); Swal.fire('已刪除', '', 'success'); } catch(e) { Swal.fire('錯誤', '刪除失敗', 'error'); } finally { toggleLoader(false); } }
+        }
+        function checkPetNotes(inputElement) {
+            const container = inputElement.closest('.pet-entry');
+            const breed = container.querySelector('.pet-breed').value.trim().toLowerCase();
+            const name = container.querySelector('.pet-name').value.trim().toLowerCase();
+            const noteDisplay = container.querySelector('.pet-auto-note');
+            const noteInput = container.querySelector('.pet-notes');
+            if (!breed && !name) { noteDisplay.classList.add('hidden'); return; }
+            const found = allPetProfiles.find(p => (p.breed || '').toLowerCase() === breed && (p.name || '').toLowerCase() === name);
+            if (found) {
+                noteDisplay.innerHTML = `<strong><i class="fa-solid fa-circle-exclamation"></i> 注意：</strong> ${found.notes}`;
+                noteDisplay.classList.remove('hidden');
+                if(noteInput && !noteInput.value.trim()) { noteInput.value = found.notes; }
+            } else { noteDisplay.classList.add('hidden'); }
+        }
+
+        function updateStats() {
+            const statBeauty = document.getElementById('stat-beauty');
+            const statBath = document.getElementById('stat-bath');
+            const statSingle = document.getElementById('stat-single');
+            const statTotal = document.getElementById('stat-total'); 
+            if (!statBeauty || !statBath || !statSingle || !statTotal) return; 
+
+            let beauty = 0, bath = 0, single = 0, total = 0;
+            currentAppointments.forEach(group => {
+                group.services.forEach(s => { 
+                    if (s === '暫不接') return;
+                    total++; 
+                    if (s === '美容') beauty++; else if (s === '洗澡') bath++; else if (s === '單項') single++; 
+                });
+            });
+            statBeauty.textContent = beauty; statBath.textContent = bath; statSingle.textContent = single; statTotal.textContent = total;
+        }
+
+        function toggleLoader(show, text = '資料同步中...') {
+            if(show) { if(loaderText) loaderText.textContent = text; loader.classList.remove('hidden'); } else { loader.classList.add('hidden'); }
+        }
+        
+        function handleIsFullChange() {
+            const isChecked = isFullCheckbox.checked;
+            const dateStr = formatDate(currentDate);
+            let currentNote = dailyNoteInput.value;
+            if (currentNote.startsWith('[FULL]')) currentNote = currentNote.substring(6); 
+            const newNote = isChecked ? `[FULL]${currentNote}` : currentNote;
+            isCurrentDateFull = isChecked; dailyNoteInput.value = currentNote; 
+            fullDatesCache[dateStr] = isChecked;
+            
+            saveDailyNote(newNote); renderTable(); renderBusinessDayButtons();
+        }
+        async function saveDailyNote(noteContent) {
+            const dateStr = formatDate(currentDate);
+            let notesToSend = noteContent;
+            if (typeof notesToSend !== 'string') {
+                let rawNote = dailyNoteInput.value;
+                notesToSend = isFullCheckbox.checked ? `[FULL]${rawNote}` : rawNote;
+            }
+            if(scheduleCache[dateStr]) scheduleCache[dateStr].note = notesToSend;
+            try {
+                await apiCall('saveDailyNote', { date: dateStr, notes: notesToSend }, 'POST');
+                const toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+                toast.fire({ icon: 'success', title: '狀態已儲存' });
+            } catch (e) { console.error(e); }
+        }
+        
+        function openRecurringModal() {
+            const modal = document.getElementById('recurring-modal');
+            if (!modal) return;
+            document.getElementById('recurring-form').reset();
+            const mainTimeSelect = document.getElementById('time-select');
+            if (mainTimeSelect && recurTimeSelect) {
+                recurTimeSelect.innerHTML = mainTimeSelect.innerHTML;
+            }
+            modal.classList.remove('hidden');
+        }
+        
+        async function handleSaveRecurringAppointment() {
+            const startDate = document.getElementById('recur-start-date').value;
+            const endDate = document.getElementById('recur-end-date').value;
+            const time = document.getElementById('recur-time').value;
+            const phone = document.getElementById('recur-phone').value;
+            const isApp = document.getElementById('recur-is-app').checked;
+            
+            const checkboxes = document.querySelectorAll('input[name="recur-day"]:checked');
+            const selectedDays = Array.from(checkboxes).map(cb => parseInt(cb.value)); 
+
+            const species = document.getElementById('recur-species').value;
+            const service = document.getElementById('recur-service').value;
+            const breed = document.getElementById('recur-breed').value;
+            const petName = document.getElementById('recur-pet-name').value;
+            const notes = document.getElementById('recur-notes').value;
+
+            if (!startDate || !endDate) { return Swal.fire('提示', '請選擇開始與結束日期', 'warning'); }
+            if (selectedDays.length === 0) { return Swal.fire('提示', '請至少勾選一天', 'warning'); }
+            if (!time) { return Swal.fire('提示', '請選擇時間', 'warning'); }
+            if (!petName && !service) { return Swal.fire('提示', '請填寫寵物資料', 'warning'); }
+
+            const targetDates = [];
+            let curr = new Date(startDate);
+            const end = new Date(endDate);
+            
+            while (curr <= end) {
+                const dateStr = formatSheetDate(curr);
+                if (selectedDays.includes(curr.getDay())) {
+                    if (!currentDaysOff.includes(dateStr)) {
+                        targetDates.push(dateStr);
+                    }
+                }
+                curr.setDate(curr.getDate() + 1);
+            }
+            
+            if (targetDates.length === 0) { return Swal.fire('提示', '區間內沒有符合的日期 (可能遇到公休日或無符合星期)', 'info'); }
+            
+            document.getElementById('recurring-modal').classList.add('hidden');
+            toggleLoader(true, `準備建立 ${targetDates.length} 筆預約...`);
+
+            let successCount = 0;
+            let failCount = 0;
+
+            for (let i = 0; i < targetDates.length; i++) {
+                const dateStr = targetDates[i];
+                toggleLoader(true, `正在建立第 ${i + 1} / ${targetDates.length} 筆... (${dateStr})`);
+                
+                const payload = {
+                    date: dateStr,
+                    time: time,
+                    phone: phone,
+                    isApp: isApp,
+                    pets: [{
+                        species: species,
+                        breed: breed,
+                        petName: petName,
+                        service: service,
+                        notes: notes
+                    }]
+                };
+
+                try {
+                    await apiCall('addAppointment', payload, 'POST');
+                    delete scheduleCache[dateStr];
+                    successCount++;
+                } catch (e) {
+                    console.error(`建立失敗 (${dateStr}):`, e);
+                    failCount++;
+                }
+            }
+
+            toggleLoader(false);
+            
+            if (failCount === 0) {
+                Swal.fire('建立完成', `成功建立 ${successCount} 筆固定預約！`, 'success');
+            } else {
+                Swal.fire('建立完成', `成功: ${successCount} 筆，失敗: ${failCount} 筆`, 'warning');
+            }
+
+            loadSchedule();
+        }
+
+        function generateTimeSlots() { const slots = []; const [startH, startM] = storeConfig.start.split(':').map(Number); const [endH, endM] = storeConfig.end.split(':').map(Number); let currH = startH, currM = startM; while (currH < endH || (currH === endH && currM <= endM)) { slots.push(`${String(currH).padStart(2,'0')}:${String(currM).padStart(2,'0')}`); currM += storeConfig.unit; if (currM >= 60) { currH += Math.floor(currM / 60); currM %= 60; } } return slots; }
+        function generateTimeSlotsOption() { 
+            const select = document.getElementById('appt-time'); 
+            select.innerHTML = ''; 
+            const options = [];
+            generateTimeSlots().forEach(time => { 
+                options.push(`<option value="${time}">${time}</option>`);
+            });
+            select.innerHTML = options.join('');
+            if(recurTimeSelect) { recurTimeSelect.innerHTML = select.innerHTML; }
+        }
+        function formatDate(date) { const year = date.getFullYear(); const month = String(date.getMonth() + 1).padStart(2, '0'); const day = String(date.getDate()).padStart(2, '0'); return `${year}-${month}-${day}`; }
+        function formatTime(timeVal) { if (timeVal instanceof Date) return `${String(timeVal.getHours()).padStart(2,'0')}:${String(timeVal.getMinutes()).padStart(2,'0')}`; if (typeof timeVal === 'string' && timeVal.includes('T')) { const d = new Date(timeVal); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; } if (typeof timeVal === 'string' && timeVal.length > 5) return timeVal.substring(0, 5); return timeVal; }
+        function getServiceColorClass(serviceName) { if (serviceName === '美容') return 'bg-beauty'; if (serviceName === '洗澡') return 'bg-bath'; if (serviceName === '單項') return 'bg-single'; return 'bg-gray-100 border-gray-200'; }
+        function toggleSidebar() { const sidebar = document.getElementById('sidebar'); const overlay = document.getElementById('sidebar-overlay'); if (sidebar.classList.contains('translate-x-full')) { sidebar.classList.remove('translate-x-full'); overlay.classList.remove('hidden'); } else { sidebar.classList.add('translate-x-full'); overlay.classList.add('hidden'); } }
+        
+        function initDatePickers() {
+            flatpickr("#nav-date-picker", {
+                locale: "zh_tw",
+                dateFormat: "Y-m-d",
+                defaultDate: "today",
+                onChange: (dates, dateStr) => {
+                    currentDate = dates[0];
+                    if (currentDate.getMonth() !== currentViewMonthDate.getMonth()) {
+                        currentViewMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+                        renderBusinessDayButtons();
+                    }
+                    loadSchedule();
+                }
+            });
+
+            flatpickr("#sidebar-dayoff-picker", {
+                locale: "zh_tw",
+                mode: "multiple",
+                dateFormat: "Y-m-d",
+                conjunction: " :: ",
+                defaultDate: [],
+                onChange: function(selectedDates, dateStr, instance) {
+                    handleDaysOffChange(selectedDates, instance);
+                }
+            });
+
+            flatpickr("#recur-start-date", { locale: "zh_tw", dateFormat: "Y-m-d" });
+            flatpickr("#recur-end-date", { locale: "zh_tw", dateFormat: "Y-m-d" });
+        }
+
+        async function fetchDaysOff() {
+            if (!currentStoreId) return;
+            try {
+                const data = await apiCall('getDaysOff');
+                currentDaysOff = data.map(d => formatDate(new Date(d))).filter(d => d);
+                const fp = document.getElementById('sidebar-dayoff-picker')._flatpickr;
+                if(fp) { fp.setDate(currentDaysOff, false); }
+                const fpNav = document.getElementById('nav-date-picker')._flatpickr;
+                if(fpNav) fpNav.set('disable', currentDaysOff);
+                renderBusinessDayButtons();
+            } catch (e) {}
+        }
+        
+        async function handleDaysOffChange(selectedDates, instance) {
+            const viewYear = instance.currentYear;
+            const viewMonth = instance.currentMonth + 1;
+            const monthStr = `${viewYear}-${String(viewMonth).padStart(2, '0')}`;
+            const datesInMonth = selectedDates.map(d => formatDate(d)).filter(d => d.startsWith(monthStr));
+                
+            try {
+                await apiCall('setDaysOff', { dates: datesInMonth, month: monthStr }, 'POST');
+                await fetchDaysOff();
+                const toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1000 });
+                toast.fire({ icon: 'success', title: '公休已更新' });
+                const dateStr = formatDate(currentDate);
+                if (currentDaysOff.includes(dateStr) || !currentDaysOff.includes(dateStr)) { loadSchedule(); }
+            } catch(e) { console.error(e); }
+        }
+        
+        function renderBusinessDayButtons() {
+            const container = businessDaysContainer;
+            container.innerHTML = '';
+            
+            const todayStr = formatDate(new Date());
+            const viewingStr = formatDate(currentDate);
+
+            const todayBtn = document.createElement('button');
+            const isTodayActive = todayStr === viewingStr;
+            let isTodayFull = isTodayActive ? isCurrentDateFull : (fullDatesCache[todayStr] === true);
+            let btnClass = 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50';
+            
+            if (isTodayActive) {
+                if (isTodayFull) { btnClass = 'btn-full-active shadow-md'; } else { btnClass = 'bg-blue-600 text-white border-blue-600 shadow-md'; }
+            } else if (isTodayFull) { 
+                 btnClass = 'bg-red-100 text-red-600 border-red-200 hover:bg-red-200'; 
+            }
+
+            todayBtn.className = `flex-shrink-0 px-4 py-2 rounded-md text-sm font-bold border transition shadow-sm ${btnClass}`;
+            todayBtn.textContent = '今天';
+            todayBtn.onclick = () => { currentDate = new Date(dateObj); updateNavDatePicker(); loadSchedule(); };
+            container.appendChild(todayBtn);
+            
+            const year = currentViewMonthDate.getFullYear();
+            const month = currentViewMonthDate.getMonth(); 
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            for(let d = 1; d <= daysInMonth; d++) {
+                const dateObj = new Date(year, month, d);
+                const dateStr = formatDate(dateObj);
+                
+                if(currentDaysOff.includes(dateStr)) continue;
+                
+                const btn = document.createElement('button');
+                const isActive = dateStr === viewingStr;
+                const isFull = (isActive && isCurrentDateFull) || (fullDatesCache[dateStr] === true);
+                const btnText = dateObj.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric', weekday: 'short' });
+                let activeClass = 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600';
+                
+                if (isActive) {
+                    if (isFull) { activeClass = 'btn-full-active shadow-md'; } else { activeClass = 'bg-blue-600 text-white border-blue-600 shadow-md'; }
+                } else if (isFull) { activeClass = 'bg-red-100 text-red-600 border-red-200 hover:bg-red-200'; }
+
+                btn.className = `flex-shrink-0 px-3 py-2 flex items-center justify-center rounded-md text-sm font-medium border transition shadow-sm ${activeClass}`;
+                btn.textContent = btnText;
+                btn.onclick = () => { currentDate = new Date(dateObj); updateNavDatePicker(); loadSchedule(); };
+                container.appendChild(btn);
+            }
+        }
+        
+        function updateBusinessDayButtonFullStatus(dateStr, isFull) {
+            fullDatesCache[dateStr] = isFull;
+            renderBusinessDayButtons();
+        }
+        
+        function updateNavDatePicker() {
+            const fp = document.getElementById('nav-date-picker')._flatpickr;
+            if(fp) fp.setDate(currentDate, false);
+        }
+        
+        function formatSheetDate(dateObject) {
+            if (!dateObject) return null;
+            if (typeof dateObject === 'string' && dateObject.match(/^\d{4}-\d{2}-\d{2}$/)) { return dateObject; }
+            try {
+                const date = new Date(dateObject);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            } catch (e) { return null; }
+        }
+    </script>
+</body>
+</html>
