@@ -1,5 +1,5 @@
 /**
- * 公休公告生成器 (月曆版 - 修正欄位對應 + 全版背景圖 + 清除背景 + 空白區備註 + 圖片縮放模式 + 圖片置頂)
+ * 公休公告生成器 (月曆版 - 修正欄位對應 + 全版背景圖 + 清除背景 + 空白區備註 + 圖片縮放模式 + 圖片置頂 + 新年預設背景)
  * 負責將公休日資料繪製成圖片
  */
 
@@ -74,7 +74,12 @@ function initAnnouncementGenerator() {
             clearBtn.onclick = function() {
                 customBgImage = null; 
                 fileInput.value = ''; 
-                drawAnnouncement();   
+                // 切換回預設模板時，如果是新年版要重新載入預設圖，如果是常規版就清空
+                if (currentTemplateType === 'newyear') {
+                    setAnnouncementTemplate('newyear');
+                } else {
+                    drawAnnouncement();
+                }
             };
             container.appendChild(clearBtn);
         }
@@ -169,10 +174,30 @@ function updateRenderOptions() {
 
 function setAnnouncementTemplate(type) {
     currentTemplateType = type;
-    customBgImage = null; 
     const fileInput = document.getElementById('announce-bg-upload');
+    const fitCheckbox = document.getElementById('bg-fit-checkbox');
+
+    // 清空手動上傳的圖片 Input (但不一定清空 customBgImage，看情況)
     if(fileInput) fileInput.value = '';
-    updateRenderOptions();
+
+    if (type === 'newyear') {
+        // 新年版：如果沒有手動上傳的圖片 (或是被清除)，就載入預設圖
+        // 為了確保切換時能生效，這裡我們重新建立一個 Image 物件
+        const img = new Image();
+        img.onload = function() { 
+            customBgImage = img; 
+            // 強制勾選「完整顯示」
+            if(fitCheckbox) fitCheckbox.checked = true;
+            drawAnnouncement(); 
+        };
+        // 設定圖片路徑，確保 background02.jpg 和 index.html 在同一目錄下
+        img.src = 'background02.jpg'; 
+    } else {
+        // 常規版：清除背景圖
+        customBgImage = null; 
+        if(fitCheckbox) fitCheckbox.checked = false; // 取消勾選
+        updateRenderOptions();
+    }
 }
 
 function drawAnnouncement() {
@@ -195,7 +220,7 @@ function drawAnnouncement() {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 如果有自訂圖片，再疊上去
+    // 如果有自訂圖片 (或預設圖片)，再疊上去
     if (customBgImage) {
         const isContain = document.getElementById('bg-fit-checkbox') && document.getElementById('bg-fit-checkbox').checked;
         if (isContain) {
