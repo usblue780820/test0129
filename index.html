@@ -73,7 +73,7 @@
             background-color: #eff6ff; /* 淺藍色 hover */
         }
         
-        /* [新增] 該時段不接客的儲存格樣式 */
+        /* 該時段不接客的儲存格樣式 */
         .content-cell-blocked {
             background-color: #e5e7eb !important; /* 深灰色 */
             cursor: not-allowed; /* 禁止符號 */
@@ -116,7 +116,7 @@
         .bg-beauty { background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
         .bg-bath { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
         .bg-single { background-color: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
-        /* [新增] 暫不接客的卡片樣式 */
+        /* 暫不接客的卡片樣式 */
         .bg-blocked { background-color: #9ca3af; color: #ffffff; border: 1px solid #6b7280; } 
         
         /* Modal 動畫 */
@@ -374,7 +374,7 @@
 
     <!-- Modals -->
     <div id="appointment-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true"><div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"><div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeAppointmentModal()"></div><span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span><div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full"><div class="bg-gray-50 px-4 py-3 border-b flex justify-between items-center"><h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title"><i class="fa-regular fa-calendar-plus mr-2"></i><span id="appt-modal-title">新增預約</span></h3><button onclick="closeAppointmentModal()" class="text-gray-400 hover:text-gray-500"><i class="fa-solid fa-xmark text-xl"></i></button></div><div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4 max-h-[70vh] overflow-y-auto"><form id="appointment-form" class="space-y-4"><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">日期</label><input type="text" id="appt-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 cursor-not-allowed" readonly></div><div><label class="block text-sm font-medium text-gray-700">時間</label><select id="appt-time" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"></select></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="col-span-2"><label class="block text-sm font-medium text-gray-700">電話號碼</label><input type="tel" id="appt-phone" placeholder="0912345678" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 p-2 border"></div><div class="flex items-center pt-6"><label class="inline-flex items-center"><input type="checkbox" id="appt-is-app" class="form-checkbox h-5 w-5 text-blue-600 rounded"><span class="ml-2 text-gray-700 text-sm">APP預約</span></label></div></div>
-    <!-- [新增] 該時段暫時不接 勾選 -->
+    <!-- 該時段暫時不接 勾選 -->
     <div class="flex items-center">
         <input type="checkbox" id="is-blocked" class="form-checkbox h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500 mr-2">
         <label for="is-blocked" class="text-sm font-bold text-red-600 cursor-pointer">⛔ 該時段暫時不接 (鎖定)</label>
@@ -414,7 +414,7 @@
             <h4 class="text-sm font-bold text-gray-600 mb-2">寵物資料</h4>
             <div class="grid grid-cols-2 gap-2 mb-2">
                 <select id="recur-species" class="w-full border p-2 rounded"><option value="狗">🐶 狗</option><option value="貓">🐱 貓</option><option value="兔子">🐰 兔子</option></select>
-                <!-- [修改] 調整選項順序: 洗澡, 美容, 單項 -->
+                <!-- 調整選項順序: 洗澡, 美容, 單項 -->
                 <select id="recur-service" class="w-full border p-2 rounded">
                     <option value="洗澡">🚿 洗澡</option>
                     <option value="美容">✂️ 美容</option>
@@ -433,22 +433,21 @@
         </div>
     </form></div></div></div></div>
 
-    <!-- [*** 新增 ***] 公告生成器 Modal -->
-    <div id="announcement-modal" class="hidden fixed inset-0 bg-gray-800 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-        <!-- 容器：相對定位以便放置關閉按鈕 -->
-        <div class="relative w-full max-w-4xl rounded-lg shadow-2xl flex bg-white overflow-hidden max-h-[90vh]">
+    <!-- [修改] 公告生成器 Modal - 手機友善版 (RWD) -->
+    <div id="announcement-modal" class="hidden fixed inset-0 bg-gray-800 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+        <!-- 容器：從 w-full 改為 max-w-6xl，並設定 flex-col (手機) / flex-row (電腦) -->
+        <div class="relative w-full max-w-6xl rounded-lg shadow-2xl flex flex-col md:flex-row bg-white overflow-hidden max-h-[90vh] md:max-h-[90vh]">
             
-            <!-- [修改] 絕對定位的關閉按鈕 (右上角) -->
+            <!-- 關閉按鈕：固定在右上角，加大點擊區域 -->
             <button onclick="document.getElementById('announcement-modal').classList.add('hidden')" 
-                    class="absolute top-4 right-4 z-50 text-gray-500 hover:text-gray-800 bg-white/80 rounded-full p-2 hover:bg-white transition shadow-sm">
+                    class="absolute top-2 right-2 z-50 text-gray-500 hover:text-gray-800 bg-white/90 rounded-full p-3 hover:bg-white transition shadow-md border border-gray-100">
                 <i class="fa-solid fa-xmark text-2xl"></i>
             </button>
 
-            <!-- 左側設定區 -->
-            <div class="w-1/3 bg-gray-50 p-5 border-r border-gray-200 overflow-y-auto">
-                <div class="flex justify-between items-center mb-6">
+            <!-- 左側設定區 (電腦版左側，手機版上方) -->
+            <div class="w-full md:w-1/3 bg-gray-50 p-5 border-b md:border-b-0 md:border-r border-gray-200 overflow-y-auto max-h-[40vh] md:max-h-full">
+                <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xl font-bold text-gray-800">公休公告設定</h3>
-                    <!-- 這裡原本的按鈕可以拿掉，或保留作為備用 -->
                 </div>
 
                 <div class="space-y-6">
@@ -457,11 +456,11 @@
                         <label class="block text-sm font-bold text-gray-700 mb-2">選擇風格</label>
                         <div class="grid grid-cols-2 gap-2">
                             <button onclick="setAnnouncementTemplate('regular')" class="p-3 border-2 border-blue-100 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-center group focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <div class="w-full h-16 bg-gradient-to-b from-blue-50 to-blue-100 rounded mb-2 group-hover:shadow-sm"></div>
+                                <div class="w-full h-12 bg-gradient-to-b from-blue-50 to-blue-100 rounded mb-2 group-hover:shadow-sm"></div>
                                 <span class="text-sm font-medium text-gray-700">常規版</span>
                             </button>
                             <button onclick="setAnnouncementTemplate('newyear')" class="p-3 border-2 border-red-100 rounded-lg hover:border-red-500 hover:bg-red-50 transition text-center group focus:outline-none focus:ring-2 focus:ring-red-500">
-                                <div class="w-full h-16 bg-gradient-to-b from-red-700 to-red-500 rounded mb-2 group-hover:shadow-sm"></div>
+                                <div class="w-full h-12 bg-gradient-to-b from-red-700 to-red-500 rounded mb-2 group-hover:shadow-sm"></div>
                                 <span class="text-sm font-medium text-gray-700">新年版</span>
                             </button>
                         </div>
@@ -484,11 +483,12 @@
                             <input type="text" id="announce-line2" class="w-full border p-2 rounded text-sm" placeholder="LINE官方帳號" oninput="updateRenderOptions()">
                             <input type="text" id="announce-line3" class="w-full border p-2 rounded text-sm" placeholder="FACEBOOK官方專頁" oninput="updateRenderOptions()">
                             <input type="text" id="announce-line4" class="w-full border p-2 rounded text-sm" placeholder="營業時間" oninput="updateRenderOptions()">
+                            <!-- JS 會自動在這裡插入額外備註欄位 -->
                         </div>
                     </div>
 
-                    <!-- 下載按鈕 -->
-                    <div class="pt-4 border-t border-gray-200">
+                    <!-- 下載按鈕 (手機版時，為了方便按到，設定區也有一個) -->
+                    <div class="pt-4 border-t border-gray-200 md:hidden">
                         <button onclick="downloadAnnouncement()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-lg flex items-center justify-center gap-2">
                             <i class="fa-solid fa-download"></i> 下載圖片
                         </button>
@@ -496,10 +496,18 @@
                 </div>
             </div>
 
-            <!-- 右側預覽區 -->
-            <div class="w-2/3 bg-gray-200 flex items-center justify-center p-8 overflow-auto">
-                <div class="shadow-2xl">
-                    <canvas id="announce-canvas" class="max-w-full h-auto rounded-lg"></canvas>
+            <!-- 右側預覽區 (電腦版右側，手機版下方) -->
+            <div class="w-full md:w-2/3 bg-gray-200 flex flex-col items-center justify-center p-4 md:p-8 overflow-y-auto flex-1">
+                <div class="shadow-2xl mb-4 md:mb-0 max-w-full">
+                    <!-- Canvas 加入 max-w-full 確保手機不破版 -->
+                    <canvas id="announce-canvas" class="max-w-full h-auto rounded-lg block mx-auto"></canvas>
+                </div>
+                
+                <!-- 電腦版下載按鈕 (手機版隱藏) -->
+                <div class="mt-4 hidden md:block">
+                     <button onclick="downloadAnnouncement()" class="bg-blue-600 text-white py-2 px-6 rounded-lg font-bold hover:bg-blue-700 transition shadow-lg flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-download"></i> 下載圖片
+                    </button>
                 </div>
             </div>
         </div>
@@ -789,7 +797,7 @@
                     tdContent.onclick = (e) => {
                         if (isCurrentDateFull) { Swal.fire('無法新增', '本日美容預約已滿', 'warning'); return; }
                         if (isBlockedSlot) { return; }
-                        // [新增] 檢查是否為公休日
+                        // 檢查是否為公休日
                         const dateStr = formatDate(currentDate);
                         if (currentDaysOff.includes(dateStr)) {
                             Swal.fire('無法新增', '本日已設為公休', 'warning');
@@ -800,7 +808,7 @@
                 } else {
                     tdContent.onclick = () => {
                         if (isCurrentDateFull) { Swal.fire('無法新增', '本日美容預約已滿', 'warning'); return; }
-                        // [新增] 檢查是否為公休日
+                        // 檢查是否為公休日
                         const dateStr = formatDate(currentDate);
                         if (currentDaysOff.includes(dateStr)) {
                             Swal.fire('無法新增', '本日已設為公休', 'warning');
@@ -809,7 +817,7 @@
                         openAppointmentModal(null, time);
                     };
                     
-                    // [新增] 只有非公休日才顯示提示文字
+                    // 只有非公休日才顯示提示文字
                     const dateStr = formatDate(currentDate);
                     if (!isCurrentDateFull && !currentDaysOff.includes(dateStr)) {
                         tdContent.innerHTML = `<span class="text-gray-300 text-sm hidden-mobile hover:text-gray-400"><i class="fa-solid fa-plus"></i> 點擊空白處新增</span>`;
