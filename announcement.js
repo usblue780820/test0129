@@ -1,6 +1,6 @@
 /**
- * 公休公告生成器 (最終穩定版 + 字型支援 + 手機版強力修復)
- * 包含：智慧欄位讀取 + 圖片強制置頂 + 完整顯示模式 + 額外備註 + 新年預設圖 + 安全渲染機制 + 字型選擇
+ * 公休公告生成器 (最終穩定版 - 簡化字型選單)
+ * 包含：智慧欄位讀取 + 圖片強制置頂 + 完整顯示模式 + 額外備註 + 新年預設圖 + 安全渲染機制 + 清風手寫體支援
  */
 
 const ANNOUNCE_CONFIG = {
@@ -38,16 +38,14 @@ const ANNOUNCE_CONFIG = {
     }
 };
 
-// 字型定義
+// 字型定義 (僅保留預設與清風)
 const FONT_MAP = {
     'default': 'Noto Sans TC, sans-serif',
-    'QingFeng': 'QingFeng, cursive',
-    'HuiWen': 'HuiWen, serif'
+    'QingFeng': 'QingFeng, cursive'
 };
 
 const FONT_FILES = {
-    'QingFeng': '清風手寫體5.ttf',
-    'HuiWen': '芫荽.ttf'
+    'QingFeng': '清風手寫體5.ttf' // 請確認伺服器上的檔案名稱是否為此
 };
 
 let currentTemplateType = 'regular';
@@ -64,33 +62,32 @@ function initAnnouncementGenerator() {
     const fileInput = document.getElementById('announce-bg-upload');
     const fontSelect = document.getElementById('announce-font-select');
 
+    // 重新加入字型監聽
     if (fontSelect) {
         fontSelect.addEventListener('change', async function(e) {
             const selectedKey = e.target.value;
             
-            // [UX改善] 在切換字型時，先顯示載入中，避免用戶以為沒反應
+            // [UX改善] 顯示載入中
             const canvas = document.getElementById(ANNOUNCE_CONFIG.canvasId);
             if (canvas) {
                 const ctx = canvas.getContext('2d');
                 ctx.save();
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.font = 'bold 50px sans-serif';
-                ctx.fillStyle = '#333';
+                ctx.font = 'bold 40px sans-serif';
+                ctx.fillStyle = '#555';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText('正在下載字型...', canvas.width/2, canvas.height/2);
+                ctx.fillText('正在套用字型...', canvas.width/2, canvas.height/2);
                 ctx.restore();
             }
 
-            // 等待字型載入完成 (使用強化版載入器)
+            // 載入字型
             await loadCustomFont(selectedKey);
             
-            // 更新當前字型設定
+            // 更新設定並重繪
             currentFontFamily = FONT_MAP[selectedKey] || FONT_MAP['default'];
-            
-            // [手機版修復] 強制延遲一點時間再繪製，確保瀏覽器渲染引擎已準備好字型
-            setTimeout(drawAnnouncement, 100);
+            setTimeout(drawAnnouncement, 100); // 稍微延遲以確保手機渲染跟上
         });
     }
 
@@ -161,79 +158,37 @@ function initAnnouncementGenerator() {
     }
 }
 
-// 載入自訂字型 (強力修復版：支援 iOS/Android 與 Fallback)
+// 載入自訂字型 (手機優化版)
 async function loadCustomFont(fontKey) {
     if (fontKey === 'default' || !FONT_FILES[fontKey]) return;
 
-    const fontName = fontKey; // 內部識別名 (例如 QingFeng)
-    const rawFontUrl = FONT_FILES[fontKey]; // 原始檔案名
+    const fontName = fontKey; 
+    const rawFontUrl = FONT_FILES[fontKey];
     
-    // [快取清除] 加上時間戳記，避免手機瀏覽器讀取到錯誤的舊快取
+    // [快取機制] 加上版本號避免手機讀到壞檔
     const fontUrlWithVer = `${rawFontUrl}?v=${new Date().getTime()}`;
 
-    // 檢查是否已經載入 (避免重複請求)
+    // 檢查是否已載入
     if (document.fonts.check(`12px "${fontName}"`)) return;
 
-    console.log(`開始載入字型: ${fontName} from ${fontUrlWithVer}`);
+    console.log(`開始載入字型: ${fontName}`);
 
     try {
-        // [方法 1] 使用標準 FontFace API
-        // 使用 encodeURI 確保中文檔名安全，並加上 format 提示
+        // [關鍵修復] 針對手機瀏覽器：
+        // 1. 使用 encodeURI 編碼中文檔名
+        // 2. URL 使用雙引號包覆
         const font = new FontFace(fontName, `url("${encodeURI(fontUrlWithVer)}")`);
-        
         await font.load();
         document.fonts.add(font);
-        
-        // 等待瀏覽器確認字型可用
         await document.fonts.ready;
-        
-        // [雙重確認] 再次檢查字型是否生效
-        if (!document.fonts.check(`12px "${fontName}"`)) {
-            throw new Error("FontFace API loaded but font not checked");
-        }
-        
-        console.log(`字型 ${fontName} 載入成功 (FontFace API)`);
+        console.log(`字型 ${fontName} 載入成功`);
     } catch (e) {
-        console.warn(`FontFace API 載入失敗，嘗試 CSS 注入備案: ${e.message}`);
-        
-        // [方法 2] 備案：使用 CSS @font-face 注入 (針對不支援 FontFace API 或載入失敗的環境)
-        injectCssFontFace(fontName, fontUrlWithVer);
-        
-        // 給予一點時間讓 CSS 生效
-        await new Promise(resolve => setTimeout(resolve, 500));
+        console.warn(`字型載入失敗: ${e.message}，將嘗試 CSS 注入法`);
+        // 備用方案：CSS注入
+        const style = document.createElement('style');
+        style.innerHTML = `@font-face { font-family: '${fontName}'; src: url('${encodeURI(fontUrlWithVer)}'); }`;
+        document.head.appendChild(style);
     }
-}
-
-// 備用方案：傳統 CSS 注入法 (Bulletproof method)
-function injectCssFontFace(fontName, fontUrl) {
-    const styleId = `font-style-${fontName}`;
-    if (document.getElementById(styleId)) return;
-
-    const css = `
-        @font-face {
-            font-family: '${fontName}';
-            src: url('${encodeURI(fontUrl)}') format('truetype');
-            font-display: swap;
-        }
-    `;
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.innerHTML = css;
-    document.head.appendChild(style);
-    
-    // 創建一個不可見的元素來觸發瀏覽器下載字型
-    const div = document.createElement('div');
-    div.style.fontFamily = fontName;
-    div.style.position = 'absolute';
-    div.style.top = '-9999px';
-    div.style.opacity = 0;
-    div.innerText = 'FontLoader';
-    document.body.appendChild(div);
-    
-    // 稍後移除
-    setTimeout(() => {
-        if(div.parentNode) div.parentNode.removeChild(div);
-    }, 2000);
 }
 
 function openAnnouncementModal() {
@@ -340,7 +295,7 @@ function drawAnnouncement() {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth() + 1;
 
-        // 決定使用的字體
+        // 決定使用的字體 (優先使用選擇的字體，否則使用預設)
         const useFont = currentFontFamily || style.font;
 
         // 1. 繪製背景 (先畫漸層底色)
