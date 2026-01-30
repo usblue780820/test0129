@@ -1,5 +1,5 @@
 /**
- * 公休公告生成器 (最終穩定版 + 字型支援)
+ * 公休公告生成器 (最終穩定版 + 字型支援 + 手機版修復)
  * 包含：智慧欄位讀取 + 圖片強制置頂 + 完整顯示模式 + 額外備註 + 新年預設圖 + 安全渲染機制 + 字型選擇
  */
 
@@ -67,8 +67,11 @@ function initAnnouncementGenerator() {
     if (fontSelect) {
         fontSelect.addEventListener('change', async function(e) {
             const selectedKey = e.target.value;
+            // 等待字型載入完成
             await loadCustomFont(selectedKey);
+            // 更新當前字型設定
             currentFontFamily = FONT_MAP[selectedKey] || FONT_MAP['default'];
+            // 重新繪製
             drawAnnouncement();
         });
     }
@@ -140,24 +143,33 @@ function initAnnouncementGenerator() {
     }
 }
 
-// 載入自訂字型
+// 載入自訂字型 (針對手機版修復)
 async function loadCustomFont(fontKey) {
     if (fontKey === 'default' || !FONT_FILES[fontKey]) return;
 
     const fontName = fontKey; // 內部識別名 (例如 QingFeng)
-    const fontUrl = FONT_FILES[fontKey]; // 檔案名 (例如 清風手寫體5.ttf)
+    const rawFontUrl = FONT_FILES[fontKey]; // 原始檔案名
 
-    // 檢查是否已經載入
+    // 檢查是否已經載入 (避免重複請求)
     const isLoaded = document.fonts.check(`12px "${fontName}"`);
     if (isLoaded) return;
 
     try {
-        const font = new FontFace(fontName, `url(${fontUrl})`);
+        // [修復重點] 
+        // 1. 使用 encodeURI 處理中文檔名，避免手機瀏覽器 (iOS/Android) 解析 URL 錯誤
+        // 2. 在 url() 內部加上雙引號，符合 CSS 標準語法，解決 Safari 解析問題
+        const safeUrl = encodeURI(rawFontUrl);
+        const font = new FontFace(fontName, `url("${safeUrl}")`);
+        
         await font.load();
         document.fonts.add(font);
+        
+        // [額外保護] 等待文件字型集準備就緒，確保 Canvas 繪製時能抓到字型
+        await document.fonts.ready;
+        
         console.log(`字型 ${fontName} 載入成功`);
     } catch (e) {
-        console.warn(`字型 ${fontName} 載入失敗 (請確認 ${fontUrl} 存在)`, e);
+        console.warn(`字型 ${fontName} 載入失敗 (請確認 ${rawFontUrl} 存在)`, e);
         // 不做額外處理，Canvas 會自動 fallback 到系統字型
     }
 }
@@ -494,4 +506,3 @@ function downloadAnnouncement() {
     link.href = canvas.toDataURL();
     link.click();
 }
-
